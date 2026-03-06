@@ -12,6 +12,7 @@ import sys
 import numpy as np
 import logging
 import time
+from model.generator import MAX_HISTORY, build_prompt, generate_response, normalize_history
 try:
     import torch
 except ImportError:
@@ -19,10 +20,8 @@ except ImportError:
 from dotenv import load_dotenv
 try:
     from google import genai
-    from google.genai import types
 except ImportError:
     genai = None
-    types = None
 import physics_engine  # Import the new module
 
 load_dotenv()
@@ -127,6 +126,13 @@ physics_facts = {
     "electromagnetism": "Electromagnetism is a branch of physics involving the study of the electromagnetic force, a type of physical interaction that occurs between electrically charged particles.",
     "friction": "Friction is the force resisting the relative motion of solid surfaces, fluid layers, and material elements sliding against each other.",
     "inertia": "Inertia is the resistance of any physical object to any change in its velocity."
+}
+
+PHYSICS_KEYWORDS = {
+    "physics", "force", "acceleration", "velocity", "speed", "distance", "time", "mass",
+    "momentum", "energy", "work", "power", "gravity", "newton", "wave", "frequency",
+    "wavelength", "electricity", "voltage", "current", "resistance", "ohm", "circuit",
+    "projectile", "kinetic", "potential", "friction", "inertia"
 }
 
 # -------------------------------
@@ -378,29 +384,59 @@ def solve_physics_problem(text):
     return None
 
 def ml_detect_intent_with_confidence(message):
+    text = (message or "").lower()
+
+    def is_physics_like():
+        has_keyword = any(word in text for word in PHYSICS_KEYWORDS)
+        has_equation_pattern = bool(re.search(r"\b([a-z]\s*=\s*[a-z0-9+\-*/^ ]+)\b", text))
+        has_units = bool(re.search(r"\b(m/s|m/s\^2|newton|n|joule|j|watt|w|volt|v|ohm|kg|m|s)\b", text))
+        return has_keyword or has_equation_pattern or has_units
+
     if ml_model and label_encoder and torch:
         try:
             # Get probability scores for all classes
             seq = tokenizer.texts_to_sequences([message])
+            if not seq or not seq[0]:
+                return ("physics", 55.0) if is_physics_like() else ("unknown", 20.0)
             tensor = torch.tensor(seq, dtype=torch.long)
             
             with torch.no_grad():
                 logits = ml_model(tensor)
                 probs = torch.softmax(logits, dim=1).numpy()[0]
             
-            max_prob = np.max(probs)
-            pred_idx = np.argmax(probs)
+            max_prob = float(np.max(probs))
+            pred_idx = int(np.argmax(probs))
+            second_prob = float(np.partition(probs, -2)[-2]) if len(probs) > 1 else 0.0
+            margin = max_prob - second_prob
             best_intent = label_encoder.inverse_transform([pred_idx])[0]
-            
-            
-            # Fallback: Use GenAI for better classification on ambiguous queries
-            if genai and os.getenv("GOOGLE_API_KEY"):
-                return detect_intent_with_genai(message, label_encoder.classes_), 65.0
-            
-            return best_intent, round(max_prob * 100, 1)
+
+            confidence = (0.7 * max_prob) + (0.3 * margin)
+            physics_like = is_physics_like()
+
+            if best_intent == "physics" and physics_like:
+                confidence = max(confidence, 0.58)
+            if best_intent != "physics" and physics_like and max_prob < 0.55:
+                best_intent = "physics"
+                confidence = max(confidence, 0.52)
+            if best_intent == "physics" and not physics_like and max_prob < 0.45:
+                best_intent = "unknown"
+                confidence = min(confidence, 0.35)
+
+            # Only ask Gemini to classify if the model is ambiguous.
+            ambiguous = max_prob < 0.55 or margin < 0.18
+            if ambiguous and genai and os.getenv("GOOGLE_API_KEY"):
+                gen_intent = detect_intent_with_genai(message, label_encoder.classes_)
+                if gen_intent in set(label_encoder.classes_):
+                    if gen_intent == best_intent:
+                        confidence = min(0.95, confidence + 0.15)
+                    elif confidence < 0.62:
+                        best_intent = gen_intent
+                        confidence = max(0.45, confidence)
+
+            return best_intent, round(max(0.0, min(1.0, confidence)) * 100, 1)
         except Exception as e:
             print(f"ML Prediction Error: {e}")
-    return "unknown", 0.0
+    return ("physics", 55.0) if is_physics_like() else ("unknown", 20.0)
 
 def ml_detect_intent(message):
     intent, _confidence = ml_detect_intent_with_confidence(message)
@@ -411,7 +447,14 @@ def detect_intent_with_genai(message, labels):
         client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
         prompt = f"Classify the following message into exactly one of these categories: {', '.join(labels)}. Message: '{message}'. Return only the category name (e.g., 'physics' or 'ai')."
         response = client.models.generate_content(model='gemini-1.5-flash', contents=prompt)
-        return response.text.strip().lower()
+        label_set = {l.lower() for l in labels}
+        raw = (response.text or "").strip().lower()
+        if raw in label_set:
+            return raw
+        for label in label_set:
+            if label in raw:
+                return label
+        return "unknown"
     except Exception as e:
         print(f"GenAI Intent Fallback Error: {e}")
         return "unknown"
@@ -794,127 +837,50 @@ def chat():
     if not request.is_json:
         return jsonify({"intent": "error", "reply": "Request must be JSON"}), 400
 
-    user_message = request.json.get("message")
+    payload = request.get_json(silent=True) or {}
+    user_message = (payload.get("message") or "").strip()
     if not user_message:
         return jsonify({"intent": "error", "reply": "Message is required"}), 400
 
-    reply = None
+    history = normalize_history(payload.get("history", []))
+    intent = "unknown"
     confidence = 0.0
+
     try:
-        cached = get_cached_reply(user_message)
-        if cached:
-            intent = cached["intent"]
-            confidence = cached["confidence"]
-            reply = cached["reply"]
-        else:
-            intent, confidence = ml_detect_intent_with_confidence(user_message)
+        intent, confidence = ml_detect_intent_with_confidence(user_message)
 
-        # Get conversation history for this specific user/session
+        # Optional deterministic hint for factual computations
+        deterministic_hint = None
+        if intent == "unit_conversion":
+            deterministic_hint = perform_unit_conversion(user_message)
+        elif intent == "physics":
+            deterministic_hint = solve_physics_problem(user_message)
+
+        prompt = build_prompt(history, user_message, intent)
+        if deterministic_hint:
+            prompt += f"\n\nReference computed result (if relevant): {deterministic_hint}"
+
+        reply = generate_response(
+            prompt,
+            intent,
+            user_message,
+            confidence,
+            deterministic_hint=deterministic_hint
+        )
+
+        # Update rolling history shared with frontend
+        history.append({"role": "user", "content": user_message})
+        history.append({"role": "assistant", "content": reply})
+        history = history[-MAX_HISTORY:]
+
+        # Keep server-side copy for existing analytics/history pages
         user_key = get_user_key()
-        chat_id = ensure_chat_id()
-        conversation_history = user_conversations.setdefault(user_key, [])
-        
-        # Memory Management: Limit history size
-        if len(conversation_history) > MAX_HISTORY_PER_USER:
-            conversation_history[:] = conversation_history[-MAX_HISTORY_PER_USER:]
-        
-        # Fetch real-time data based on intent to provide context
-        online_data = fetch_online_data(intent) if not reply else None
-
-        # 1. Try Local Physics Solver (Deterministic)
-        if not reply and intent == "physics":
-            reply = solve_physics_problem(user_message)
-
-        # 2. Try AI API (Google Gemini)
-        api_key = os.getenv("GOOGLE_API_KEY")
-        if (not reply or intent == "unknown") and api_key and genai:
-            try:
-                # Construct system prompt
-                system_prompt = "You are Vector AI, a helpful and smart assistant."
-                
-                if intent == "physics":
-                    system_prompt += " You are an expert physics tutor. Provide dynamic, detailed explanations with real-world examples."
-                    system_prompt += " If the user presents a word problem, use the Reference Equations to solve it step-by-step."
-                    system_prompt += f" Reference facts: {json.dumps(physics_facts)}"
-                    try:
-                        corpus = ml_train.get_physics_corpus()
-                        system_prompt += f" Reference Equations: {json.dumps(corpus)}"
-                    except Exception:
-                        pass
-                elif intent == "unit_conversion":
-                    system_prompt += " You are a helpful unit converter. Convert the requested units accurately."
-                else:
-                    system_prompt += " Answer the user's question clearly and concisely. Do not give generic 'I don't know' responses if you can answer."
-
-                if online_data:
-                    system_prompt += f" Here is the latest info on the topic: {online_data}"
-                
-                client = genai.Client(api_key=api_key)
-                
-                # Convert history to Gemini format
-                chat_history = []
-                for msg in conversation_history:
-                    role = "user" if msg["role"] == "user" else "model"
-                    chat_history.append(types.Content(role=role, parts=[types.Part(text=msg["content"])]))
-
-                chat = client.chats.create(
-                    model='gemini-1.5-flash',
-                    config=types.GenerateContentConfig(system_instruction=system_prompt),
-                    history=chat_history
-                )
-                response = chat.send_message(user_message)
-                reply = response.text
-                
-                # Update history
-                conversation_history.append({"role": "user", "content": user_message})
-                conversation_history.append({"role": "assistant", "content": reply})
-            except Exception as e:
-                print(f"AI API Error: {e}")
-
-        # 3. Fallback to Rule-based/Local ML if API fails or no key
-        if not reply:
-            # Rescue "unknown" intent with simple keyword matching
-            if intent == "unknown":
-                for key in responses:
-                    if key in user_message.lower():
-                        intent = key
-                        break
-
-            if intent == "physics":
-                # Prioritize local definitions if specific keyword is present
-                if "equation" in user_message.lower() or "formula" in user_message.lower():
-                    try:
-                        corpus = ml_train.get_physics_corpus()
-                        lines = ["Here are some key physics equations:"]
-                        for group in corpus.get("equations", []):
-                            lines.append(f"\n**{group['domain'].capitalize()}**")
-                            for eq in group["eq"]:
-                                lines.append(f"- {eq}")
-                        reply = "\n".join(lines)
-                    except Exception:
-                        reply = "I couldn't retrieve the equations at the moment."
-                elif any(k in user_message.lower() for k in physics_facts):
-                    reply = get_physics_info(user_message)
-                elif online_data:
-                    reply = online_data
-                else:
-                    reply = get_physics_info(user_message)
-            elif intent == "unit_conversion":
-                # Try local conversion first
-                local_result = perform_unit_conversion(user_message)
-                if local_result:
-                    reply = local_result
-            elif online_data:
-                reply = online_data
-            elif intent in responses:
-                reply = responses[intent]
+        user_conversations[user_key] = list(history)
+        ensure_chat_id()
     except Exception as e:
         print(f"Chat Error: {e}")
+        reply = "I hit a temporary issue. Please retry your physics question."
 
-    if not reply:
-        reply = responses["unknown"]
-
-    set_cached_reply(user_message, reply, intent, confidence)
     save_user_data(
         user_message,
         intent,
@@ -924,7 +890,7 @@ def chat():
         reply=reply
     )
 
-    return jsonify({"reply": reply, "confidence": confidence, "intent": intent})
+    return jsonify({"reply": reply, "history": history, "confidence": confidence, "intent": intent})
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000,)
