@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import { useAuth } from './context/AuthContext';
 import useAnalytics from './useAnalytics';
 import Layout from './components/Layout';
@@ -65,6 +66,7 @@ function App() {
           <Route path="*" element={<Landing onNavigate={handleAuthNavigation} />} />
         </Routes>
         <Analytics />
+        <SpeedInsights />
       </ToastProvider>
     );
   }
@@ -158,6 +160,7 @@ function App() {
         </Routes>
       </Layout>
       <Analytics />
+      <SpeedInsights />
     </ToastProvider>
   );
 }
