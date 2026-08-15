@@ -1,100 +1,80 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import {
-  ArrowRight, Mic, FlaskConical, BookOpen, FileText,
-  ChevronDown, Cpu, Sparkles, Award, ShieldCheck, Zap, Play
+  ArrowRight,
+  Mic,
+  FlaskConical,
+  BookOpen,
+  FileText,
+  ChevronDown,
+  Cpu,
+  Sparkles,
+  ShieldCheck,
+  Play,
+  Brain,
+  Atom,
+  Calculator,
+  GraduationCap,
+  Check,
+  CircleDot,
 } from 'lucide-react';
 
-/* ── Floating Orbs ── */
-const FloatingOrbs = () => (
-  <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
-    <div className="orb absolute top-[10%] left-[10%] w-[400px] h-[400px] bg-emerald-500/10 blur-[120px] anim-float-slow" />
-    <div className="orb absolute bottom-[20%] right-[5%] w-[350px] h-[350px] bg-emerald-500/10 blur-[100px] anim-float" style={{ animationDelay: '-3s' }} />
-    <div className="orb absolute top-[40%] right-[15%] w-[300px] h-[300px] bg-emerald-600/5 blur-[140px] anim-float-slow" style={{ animationDelay: '-5s' }} />
+/* ─────────────────────────────────────────────────────────────
+   Ambient background
+───────────────────────────────────────────────────────────── */
+
+const ScientificBackground = () => (
+  <div className="pointer-events-none absolute inset-0 overflow-hidden">
+    <div className="absolute left-1/2 top-[-18rem] h-[42rem] w-[42rem] -translate-x-1/2 rounded-full bg-emerald-500/[0.07] blur-[120px]" />
+
+    <div
+      className="absolute inset-0 opacity-[0.14]"
+      style={{
+        backgroundImage:
+          'linear-gradient(rgba(255,255,255,0.045) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.045) 1px, transparent 1px)',
+        backgroundSize: '64px 64px',
+        maskImage:
+          'radial-gradient(ellipse 75% 48% at 50% 0%, black 5%, transparent 78%)',
+        WebkitMaskImage:
+          'radial-gradient(ellipse 75% 48% at 50% 0%, black 5%, transparent 78%)',
+      }}
+    />
+
+    <div className="absolute left-[8%] top-[18%] h-px w-24 rotate-[24deg] bg-gradient-to-r from-transparent via-emerald-400/20 to-transparent" />
+    <div className="absolute right-[10%] top-[26%] h-px w-32 -rotate-[30deg] bg-gradient-to-r from-transparent via-emerald-400/15 to-transparent" />
   </div>
 );
 
-/* ── Particle System ── */
-const Particles = () => {
-  const [particles, setParticles] = useState([]);
-  useEffect(() => {
-    const count = 25;
-    const newParticles = Array.from({ length: count }).map((_, i) => ({
-      id: i,
-      left: `${Math.random() * 100}%`,
-      bottom: `-${Math.random() * 20}%`,
-      duration: `${10 + Math.random() * 15}s`,
-      delay: `${Math.random() * 10}s`,
-      opacity: 0.1 + Math.random() * 0.4,
-      size: `${1 + Math.random() * 3}px`
-    }));
-    setParticles(newParticles);
-  }, []);
-
-  return (
-    <div className="absolute inset-0 pointer-events-none overflow-hidden">
-      {particles.map(p => (
-        <div 
-          key={p.id}
-          className="particle bg-emerald-400"
-          style={{
-            left: p.left,
-            bottom: p.bottom,
-            width: p.size,
-            height: p.size,
-            opacity: p.opacity,
-            animationDuration: p.duration,
-            animationDelay: p.delay
-          }}
-        />
-      ))}
-    </div>
-  );
-};
-
-/* ── Animated counter ── */
-const Counter = ({ end, suffix = '', duration = 1800 }) => {
-  const [val, setVal] = useState(0);
-  const ref = useRef(null);
-  useEffect(() => {
-    const observer = new IntersectionObserver(([e]) => {
-      if (e.isIntersecting) {
-        const start = performance.now();
-        const tick = (now) => {
-          const progress = Math.min((now - start) / duration, 1);
-          const eased = 1 - Math.pow(1 - progress, 4);
-          setVal(Math.round(eased * parseFloat(end)));
-          if (progress < 1) requestAnimationFrame(tick);
-        };
-        requestAnimationFrame(tick);
-        observer.disconnect();
-      }
-    }, { threshold: 0.3 });
-    if (ref.current) observer.observe(ref.current);
-    return () => observer.disconnect();
-  }, [end, duration]);
-  return <span ref={ref}>{val}{suffix}</span>;
-};
+/* ─────────────────────────────────────────────────────────────
+   Small UI primitives
+───────────────────────────────────────────────────────────── */
 
 const Reveal = ({ children, className = '', delay = 0, variant = 'from-bottom' }) => {
   const ref = useRef(null);
   const [visible, setVisible] = useState(false);
+
   useEffect(() => {
-    const obs = new IntersectionObserver(([e]) => {
-      if (e.isIntersecting) { setVisible(true); obs.disconnect(); }
-    }, { threshold: 0.12 });
+    const obs = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setVisible(true);
+          obs.disconnect();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
     if (ref.current) obs.observe(ref.current);
     return () => obs.disconnect();
   }, []);
 
-  const getTransform = () => {
-    if (visible) return 'translate(0, 0)';
-    switch (variant) {
-      case 'from-left': return 'translateX(-40px)';
-      case 'from-right': return 'translateX(40px)';
-      case 'from-bottom': default: return 'translateY(20px)';
-    }
-  };
+  const transform = visible
+    ? 'translate3d(0,0,0)'
+    : variant === 'from-left'
+      ? 'translate3d(-24px,0,0)'
+      : variant === 'from-right'
+        ? 'translate3d(24px,0,0)'
+        : 'translate3d(0,18px,0)';
 
   return (
     <div
@@ -102,8 +82,8 @@ const Reveal = ({ children, className = '', delay = 0, variant = 'from-bottom' }
       className={className}
       style={{
         opacity: visible ? 1 : 0,
-        transform: getTransform(),
-        transition: `opacity .8s cubic-bezier(0.16,1,0.3,1) ${delay}ms, transform .8s cubic-bezier(0.16,1,0.3,1) ${delay}ms`,
+        transform,
+        transition: `opacity .7s cubic-bezier(.16,1,.3,1) ${delay}ms, transform .7s cubic-bezier(.16,1,.3,1) ${delay}ms`,
       }}
     >
       {children}
@@ -111,35 +91,280 @@ const Reveal = ({ children, className = '', delay = 0, variant = 'from-bottom' }
   );
 };
 
-const FaqItem = ({ q, a, delay }) => {
-  const [open, setOpen] = useState(false);
-  return (
-    <Reveal delay={delay}>
-      <div
-        className="rounded-xl border border-white/[0.06] bg-zinc-900/30 hover:bg-zinc-900/50 hover:border-white/[0.09] overflow-hidden cursor-pointer transition-all duration-300"
-        onClick={() => setOpen(o => !o)}
-        role="button"
-        aria-expanded={open}
-      >
-        <div className="flex items-center justify-between px-5 py-4">
-          <p className="text-[14px] font-medium text-zinc-100 pr-4 leading-snug">{q}</p>
-          <ChevronDown
-            className="w-4 h-4 text-zinc-500 shrink-0 transition-transform duration-300"
-            style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}
-          />
+const Eyebrow = ({ icon: Icon = Sparkles, children }) => (
+  <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-emerald-400/15 bg-emerald-400/[0.06] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-300">
+    <Icon className="h-3.5 w-3.5" strokeWidth={2.2} />
+    {children}
+  </div>
+);
+
+const ArrowButton = ({ children, onClick, secondary = false }) => (
+  <button
+    onClick={onClick}
+    className={
+      secondary
+        ? 'group inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.035] px-5 py-3 text-[13px] font-semibold text-zinc-200 transition-all duration-300 hover:border-white/15 hover:bg-white/[0.07] hover:text-white'
+        : 'group inline-flex items-center gap-2 rounded-xl bg-emerald-400 px-5 py-3 text-[13px] font-bold text-zinc-950 shadow-[0_12px_35px_-15px_rgba(52,211,153,.75)] transition-all duration-300 hover:-translate-y-0.5 hover:bg-emerald-300 hover:shadow-[0_16px_40px_-15px_rgba(52,211,153,.9)]'
+    }
+  >
+    {children}
+    <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-0.5" />
+  </button>
+);
+
+/* ─────────────────────────────────────────────────────────────
+   Product preview
+───────────────────────────────────────────────────────────── */
+
+const PhysicsPreview = () => (
+  <div className="relative mx-auto mt-14 w-full max-w-5xl">
+    <div className="absolute -inset-8 rounded-[3rem] bg-emerald-500/[0.06] blur-3xl" />
+
+    <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0b0d0c] shadow-[0_35px_100px_-35px_rgba(0,0,0,.9)]">
+      <div className="flex h-11 items-center justify-between border-b border-white/[0.07] px-4">
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-white/15" />
+            <span className="h-2 w-2 rounded-full bg-white/15" />
+            <span className="h-2 w-2 rounded-full bg-white/15" />
+          </div>
+          <span className="ml-2 text-[10px] font-medium text-zinc-500">Vector AI / Physics Lab</span>
         </div>
-        <div 
-          className="transition-all duration-500 ease-in-out overflow-hidden"
-          style={{ maxHeight: open ? '200px' : '0' }}
-        >
-          <div className="px-5 pb-5 pt-0 border-t border-white/[0.05]">
-            <p className="text-zinc-400 text-[13.5px] leading-relaxed pt-4">{a}</p>
+        <div className="flex items-center gap-1.5 text-[10px] text-emerald-400">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+          Simulation ready
+        </div>
+      </div>
+
+      <div className="grid min-h-[330px] md:grid-cols-[1fr_280px]">
+        <div className="relative border-b border-white/[0.07] p-5 md:border-b-0 md:border-r">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <p className="text-[11px] font-semibold text-zinc-200">Projectile Motion</p>
+              <p className="mt-1 text-[9px] text-zinc-600">Interactive simulation</p>
+            </div>
+            <div className="rounded-md border border-white/[0.07] bg-white/[0.025] px-2 py-1 text-[9px] text-zinc-500">
+              2D
+            </div>
+          </div>
+
+          <div
+            className="relative h-[235px] overflow-hidden rounded-xl border border-white/[0.06] bg-[#080a09]"
+            style={{
+              backgroundImage:
+                'linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px)',
+              backgroundSize: '36px 36px',
+            }}
+          >
+            <div className="absolute bottom-8 left-8 right-8 h-px bg-white/10" />
+            <div className="absolute bottom-8 left-8 top-8 w-px bg-white/10" />
+
+            <svg className="absolute inset-0 h-full w-full" viewBox="0 0 700 300" preserveAspectRatio="none">
+              <path
+                d="M55 245 C180 55 390 65 610 235"
+                fill="none"
+                stroke="rgba(52,211,153,.7)"
+                strokeWidth="2"
+                strokeDasharray="7 7"
+              />
+              <circle cx="55" cy="245" r="7" fill="#34d399" />
+              <circle cx="610" cy="235" r="6" fill="#34d399" opacity=".8" />
+              <line x1="55" y1="245" x2="130" y2="155" stroke="rgba(52,211,153,.5)" strokeWidth="2" />
+              <polygon points="130,155 119,159 125,168" fill="rgba(52,211,153,.7)" />
+            </svg>
+
+            <div className="absolute bottom-3 left-10 text-[8px] text-zinc-700">x / displacement</div>
+            <div className="absolute left-2 top-9 -rotate-90 text-[8px] text-zinc-700">y / height</div>
+          </div>
+
+          <div className="mt-3 flex items-center justify-between text-[9px] text-zinc-600">
+            <span>t = 1.84 s</span>
+            <span>g = 9.81 m/s²</span>
+            <span>Scale 1:10</span>
+          </div>
+        </div>
+
+        <div className="p-5">
+          <div className="mb-5 flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-400/10 text-emerald-400">
+              <Brain className="h-3.5 w-3.5" />
+            </div>
+            <div>
+              <p className="text-[10px] font-semibold text-zinc-200">AI Tutor</p>
+              <p className="text-[8px] text-zinc-600">Guided explanation</p>
+            </div>
+          </div>
+
+          <p className="text-[11px] leading-relaxed text-zinc-400">
+            “The horizontal velocity remains constant because there is no horizontal force acting on the projectile.”
+          </p>
+
+          <div className="my-5 h-px bg-white/[0.06]" />
+
+          <div className="space-y-3">
+            {[
+              ['Initial velocity', '24.5 m/s'],
+              ['Launch angle', '42°'],
+              ['Maximum height', '13.7 m'],
+              ['Range', '58.2 m'],
+            ].map(([label, value]) => (
+              <div key={label} className="flex items-center justify-between">
+                <span className="text-[9px] text-zinc-600">{label}</span>
+                <span className="font-mono text-[10px] text-zinc-300">{value}</span>
+              </div>
+            ))}
+          </div>
+
+          <button className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg border border-emerald-400/15 bg-emerald-400/[0.06] py-2 text-[9px] font-semibold text-emerald-300">
+            <Mic className="h-3 w-3" />
+            Ask the tutor
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+/* ─────────────────────────────────────────────────────────────
+   Feature cards
+───────────────────────────────────────────────────────────── */
+
+const ModuleVisual = ({ type }) => {
+  if (type === 'voice') {
+    return (
+      <div className="mt-6 flex h-24 items-center justify-center rounded-xl border border-white/[0.06] bg-black/20">
+        <div className="flex items-center gap-1.5">
+          {[18, 30, 44, 26, 52, 34, 20, 40, 25].map((height, i) => (
+            <span
+              key={i}
+              className="w-1 rounded-full bg-emerald-400/60"
+              style={{ height }}
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (type === 'lab') {
+    return (
+      <div className="relative mt-6 h-24 overflow-hidden rounded-xl border border-white/[0.06] bg-black/20">
+        <svg className="absolute inset-0 h-full w-full" viewBox="0 0 400 100">
+          <path
+            d="M20 78 C100 10 205 8 375 72"
+            fill="none"
+            stroke="rgba(52,211,153,.55)"
+            strokeWidth="1.5"
+            strokeDasharray="5 5"
+          />
+          <circle cx="20" cy="78" r="4" fill="#34d399" />
+          <circle cx="375" cy="72" r="3" fill="#34d399" opacity=".7" />
+        </svg>
+        <span className="absolute bottom-2 left-3 text-[8px] text-zinc-700">x</span>
+        <span className="absolute left-2 top-2 text-[8px] text-zinc-700">y</span>
+      </div>
+    );
+  }
+
+  if (type === 'notes') {
+    return (
+      <div className="mt-6 flex h-24 items-center justify-center rounded-xl border border-white/[0.06] bg-black/20">
+        <div className="w-44 rounded-lg border border-white/[0.08] bg-zinc-900/80 p-3 shadow-xl">
+          <div className="mb-2 h-1.5 w-16 rounded bg-zinc-600" />
+          <div className="space-y-1.5">
+            <div className="h-1 rounded bg-zinc-700" />
+            <div className="h-1 w-4/5 rounded bg-zinc-700" />
+            <div className="mt-2 h-1 rounded bg-emerald-400/40" />
+            <div className="h-1 w-3/5 rounded bg-zinc-700" />
           </div>
         </div>
       </div>
+    );
+  }
+
+  return (
+    <div className="mt-6 flex h-24 items-center justify-center rounded-xl border border-white/[0.06] bg-black/20">
+      <div className="relative h-16 w-44">
+        <div className="absolute left-1/2 top-1/2 h-px w-32 -translate-x-1/2 bg-white/10" />
+        <div className="absolute left-1/2 top-1/2 h-32 w-px -translate-y-1/2 bg-white/10" />
+        <div className="absolute left-1/2 top-1/2 h-9 w-9 -translate-x-1/2 -translate-y-1/2 rounded-full border border-emerald-400/30 bg-emerald-400/[0.06]" />
+        <div className="absolute left-[31%] top-[20%] h-2 w-2 rounded-full bg-emerald-400/70" />
+        <div className="absolute right-[23%] bottom-[20%] h-1.5 w-1.5 rounded-full bg-zinc-500" />
+      </div>
+    </div>
+  );
+};
+
+const FeatureCard = ({ icon: Icon, title, desc, tags, visual, delay }) => (
+  <Reveal delay={delay}>
+    <article className="group h-full rounded-2xl border border-white/[0.07] bg-white/[0.018] p-6 transition-all duration-500 hover:-translate-y-1 hover:border-emerald-400/15 hover:bg-white/[0.035]">
+      <div className="flex items-start justify-between">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-emerald-400/10 bg-emerald-400/[0.06] text-emerald-400 transition-transform duration-500 group-hover:scale-105">
+          <Icon className="h-[18px] w-[18px]" strokeWidth={1.8} />
+        </div>
+        <span className="font-mono text-[9px] text-zinc-700">0{delay / 100 + 1}</span>
+      </div>
+
+      <h3 className="mt-5 text-[16px] font-semibold tracking-tight text-zinc-100">{title}</h3>
+      <p className="mt-2 text-[13px] leading-6 text-zinc-500">{desc}</p>
+
+      <ModuleVisual type={visual} />
+
+      <div className="mt-4 flex flex-wrap gap-1.5">
+        {tags.map((tag) => (
+          <span
+            key={tag}
+            className="rounded-md border border-white/[0.06] bg-white/[0.025] px-2 py-1 text-[9px] font-semibold text-zinc-500 transition-colors group-hover:text-zinc-400"
+          >
+            {tag}
+          </span>
+        ))}
+      </div>
+    </article>
+  </Reveal>
+);
+
+/* ─────────────────────────────────────────────────────────────
+   FAQ
+───────────────────────────────────────────────────────────── */
+
+const FaqItem = ({ q, a, delay }) => {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Reveal delay={delay}>
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        className="w-full rounded-xl border border-white/[0.07] bg-white/[0.018] text-left transition-colors duration-300 hover:border-white/[0.11] hover:bg-white/[0.03]"
+      >
+        <div className="flex items-center justify-between gap-5 px-5 py-5">
+          <span className="text-[13px] font-medium text-zinc-200">{q}</span>
+          <ChevronDown
+            className="h-4 w-4 shrink-0 text-zinc-600 transition-transform duration-300"
+            style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}
+          />
+        </div>
+
+        <div
+          className="grid transition-[grid-template-rows] duration-300"
+          style={{ gridTemplateRows: open ? '1fr' : '0fr' }}
+        >
+          <div className="overflow-hidden">
+            <p className="border-t border-white/[0.06] px-5 pb-5 pt-4 text-[12.5px] leading-6 text-zinc-500">
+              {a}
+            </p>
+          </div>
+        </div>
+      </button>
     </Reveal>
   );
 };
+
+/* ─────────────────────────────────────────────────────────────
+   Main landing page
+───────────────────────────────────────────────────────────── */
 
 const Landing = ({ onNavigate }) => {
   const { isAuthenticated } = useAuth();
@@ -148,308 +373,377 @@ const Landing = ({ onNavigate }) => {
   const features = [
     {
       icon: Mic,
-      title: "Real-time AI voice tutor",
-      desc: "Speak naturally; get instant vocal explanations powered by CAMB AI & ElevenLabs synthesis.",
-      tags: ["Voice synthesis", "Low latency"],
+      title: 'Learn through conversation',
+      desc: 'Ask questions naturally and get explanations that guide you toward understanding instead of simply giving you an answer.',
+      tags: ['Voice tutoring', 'Low latency'],
+      visual: 'voice',
     },
     {
       icon: FlaskConical,
-      title: "2D physics visual lab",
-      desc: "Run kinetic simulations — projectiles, waves, orbits — side-by-side with your study chat.",
-      tags: ["Canvas 2D", "Interactive HUD"],
+      title: 'See the physics happen',
+      desc: 'Turn equations into intuition with interactive 2D simulations for motion, waves, orbits, and other physical systems.',
+      tags: ['2D simulation', 'Interactive'],
+      visual: 'lab',
     },
     {
       icon: BookOpen,
-      title: "100% CAPS aligned",
-      desc: "Engineered for South African Grade 10–12 Physical Sciences and Chemistry curricula.",
-      tags: ["CAPS curriculum", "SA focused"],
+      title: 'Built around CAPS',
+      desc: 'Study within the South African Physical Sciences curriculum, with concepts and examples organised around what you actually need to learn.',
+      tags: ['Grade 10–12', 'CAPS aligned'],
+      visual: 'notes',
     },
     {
       icon: FileText,
-      title: "Semantic notes vault",
-      desc: "AI-generated study guides with LaTeX math, worked examples, and branded PDF exports.",
-      tags: ["LaTeX", "PDF export"],
+      title: 'Turn concepts into notes',
+      desc: 'Generate structured study material with formulas, worked examples, explanations, and mathematical notation.',
+      tags: ['LaTeX', 'Study guides'],
+      visual: 'notes',
     },
   ];
 
-  const stats = [
-    { value: 90,  suffix: ' ms', label: "Inference latency",       icon: Cpu },
-    { value: 98,  suffix: '%',   label: "Trajectory fidelity",     icon: Award },
-    { value: 100, suffix: '%',   label: "CAPS match",              icon: ShieldCheck },
-    { value: 5,   suffix: '+',   label: "Live simulations",        icon: FlaskConical },
+  const workflow = [
+    {
+      number: '01',
+      icon: Brain,
+      title: 'Ask',
+      text: 'Start with the question you are stuck on. Type it or ask it out loud.',
+    },
+    {
+      number: '02',
+      icon: FlaskConical,
+      title: 'Explore',
+      text: 'Use simulations and visual explanations to connect the mathematics to the physical world.',
+    },
+    {
+      number: '03',
+      icon: GraduationCap,
+      title: 'Understand',
+      text: 'Turn the lesson into notes and worked examples you can return to when studying.',
+    },
   ];
 
   const faqs = [
-    { q: "Is Vector AI aligned with the South African CAPS curriculum?", a: "Yes, 100%. All content is calibrated against CAPS guidelines for Grade 10–12 Physical Sciences and Chemistry." },
-    { q: "How does the AI voice tutor work?", a: "Press mic, speak your question. The system transcribes, processes intent, matches a physics simulation, then synthesises a spoken response in real time." },
-    { q: "Can I use Vector AI offline?", a: "Your saved notes and flashcards are cached locally and sync back to the cloud when you reconnect." },
-    { q: "How do I generate comprehensive study guides?", a: "Navigate to Study Notes, type any CAPS topic (e.g. 'Projectile Motion'), and hit Generate. The AI writes a full guide with formulas and worked examples." },
+    {
+      q: 'Is Vector AI aligned with the South African CAPS curriculum?',
+      a: 'Vector AI is designed around the South African CAPS Physical Sciences curriculum for Grade 10–12.',
+    },
+    {
+      q: 'How does the AI voice tutor work?',
+      a: 'Ask a question using your voice, let Vector AI process it, and receive a spoken explanation alongside the learning experience.',
+    },
+    {
+      q: 'Can I use Vector AI offline?',
+      a: 'Saved learning material can be cached locally and synchronised when connectivity is restored, depending on the feature.',
+    },
+    {
+      q: 'Can Vector AI generate study guides?',
+      a: 'Yes. Study Notes can turn a CAPS topic into a structured guide containing explanations, formulas, and worked examples.',
+    },
   ];
 
   return (
-    <div className="relative min-h-dvh overflow-x-hidden bg-zinc-950 text-zinc-100 font-sans antialiased">
-      <FloatingOrbs />
-      <Particles />
-
-      {/* Grid Overlay */}
-      <div
-        className="absolute inset-0 pointer-events-none z-0 opacity-[0.2]"
-        style={{
-          backgroundImage: 'linear-gradient(rgba(16,185,129,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(16,185,129,0.05) 1px, transparent 1px)',
-          backgroundSize: '40px 40px',
-          WebkitMaskImage: 'radial-gradient(ellipse 60% 40% at 50% 10%, black 20%, transparent 80%)',
-          maskImage: 'radial-gradient(ellipse 60% 40% at 50% 10%, black 20%, transparent 80%)',
-        }}
-      />
+    <div className="min-h-dvh overflow-x-hidden bg-[#070908] font-sans text-zinc-100 antialiased selection:bg-emerald-400/20 selection:text-emerald-200">
+      <ScientificBackground />
 
       {/* Navbar */}
       <header className="sticky top-0 z-50 px-4 pt-4">
-        <nav className="mx-auto max-w-6xl flex items-center justify-between rounded-xl border border-white/[0.07] bg-zinc-950/70 backdrop-blur-xl px-4 py-2.5 shadow-[0_8px_24px_-8px_rgba(0,0,0,0.6)] anim-fade-down">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center shadow-[0_4px_12px_-2px_rgba(16,185,129,0.5)] anim-glow">
-              <Zap className="w-4 h-4 text-zinc-950" strokeWidth={2.75} />
+        <nav className="mx-auto flex max-w-6xl items-center justify-between rounded-2xl border border-white/[0.08] bg-[#070908]/80 px-4 py-2.5 shadow-2xl shadow-black/20 backdrop-blur-2xl">
+          <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-300/20 bg-emerald-400 text-zinc-950 shadow-[0_8px_25px_-10px_rgba(52,211,153,.8)]">
+              <Atom className="h-4 w-4" strokeWidth={2.4} />
             </div>
-            <div className="leading-none">
-              <span className="font-semibold text-[14px] tracking-tight block text-zinc-50">Vector AI</span>
-              <span className="text-[9.5px] tracking-[0.18em] text-emerald-400/90 font-medium uppercase block mt-0.5">STEM OS</span>
+            <div className="text-left leading-none">
+              <span className="block text-[14px] font-semibold tracking-tight text-zinc-50">Vector AI</span>
+              <span className="mt-1 block text-[8px] font-bold uppercase tracking-[0.2em] text-emerald-400/80">STEM learning system</span>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
+          </button>
+
+          <div className="flex items-center gap-1">
             <button
               onClick={go}
-              className="hidden sm:inline-flex items-center px-3 py-1.5 text-[13px] font-medium text-zinc-300 hover:text-zinc-50 transition-colors cursor-pointer"
+              className="hidden px-3 py-2 text-[12px] font-medium text-zinc-500 transition-colors hover:text-zinc-100 sm:block"
             >
               Sign in
             </button>
             <button
               onClick={go}
-              className="group inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-500 text-zinc-950 text-[13px] font-bold hover:bg-emerald-400 transition-all shadow-lg hover:shadow-emerald-500/20 cursor-pointer"
+              className="group inline-flex items-center gap-1.5 rounded-lg bg-emerald-400 px-3.5 py-2 text-[12px] font-bold text-zinc-950 transition-all hover:bg-emerald-300"
             >
-              Get started
-              <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" strokeWidth={2.5} />
+              Start learning
+              <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
             </button>
           </div>
         </nav>
       </header>
 
       {/* Hero */}
-      <section className="relative z-10 px-6 pt-24 pb-28 text-center max-w-4xl mx-auto flex flex-col items-center">
-        <Reveal>
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 mb-7 rounded-full bg-emerald-500/[0.08] border border-emerald-500/15 anim-breathe">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-emerald-300 font-medium text-[11.5px] tracking-wide">AI-accelerated Physical Science</span>
-          </div>
-        </Reveal>
-
-        <h1
-          className="font-semibold tracking-[-0.025em] leading-[1.02] mb-6 text-zinc-50"
-          style={{ fontSize: 'clamp(2.4rem, 7vw, 4.75rem)' }}
-        >
-          <Reveal delay={100}>Master physical science,</Reveal>
-          <Reveal delay={250}>
-            <span className="block bg-gradient-to-r from-emerald-300 to-emerald-400 bg-clip-text text-transparent">
-              intelligently.
-            </span>
-          </Reveal>
-        </h1>
-
-        <Reveal delay={400}>
-          <p className="text-zinc-400 text-[15px] sm:text-[16px] leading-relaxed max-w-xl mb-10">
-            South Africa's CAPS-aligned tutoring platform. Interactive 2D simulations, real-time voice tutoring, and semantic study notes — engineered for matric mastery.
-          </p>
-        </Reveal>
-
-        <Reveal delay={550}>
-          <div className="flex flex-col sm:flex-row items-center gap-3 mb-16">
-            <button
-              onClick={go}
-              className="group flex items-center gap-2 px-6 py-3 font-bold rounded-lg text-[14px] cursor-pointer bg-emerald-500 hover:bg-emerald-400 text-zinc-950 transition-all shadow-xl hover:shadow-emerald-500/30 hover:-translate-y-0.5 anim-glow"
-            >
-              <Play className="w-3.5 h-3.5 fill-current" />
-              Launch Vector AI
-              <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" strokeWidth={2.5} />
-            </button>
-            <p className="text-zinc-500 text-[12.5px] font-medium">Free · No credit card required</p>
-          </div>
-        </Reveal>
-
-        {/* Stats strip */}
-        <Reveal delay={700} className="w-full">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-white/[0.05] rounded-xl overflow-hidden border border-white/[0.06] max-w-3xl mx-auto shadow-2xl">
-            {stats.map((s, i) => {
-              const Icon = s.icon;
-              return (
-                <div key={i} className="bg-zinc-950/80 px-5 py-5 text-center group hover:bg-zinc-900/50 transition-colors">
-                  <Icon className="w-3.5 h-3.5 text-emerald-400/80 mx-auto mb-2.5 transition-transform group-hover:scale-110" strokeWidth={1.8} />
-                  <div className="text-[22px] font-bold tracking-tight text-zinc-50 tabular-nums">
-                    <Counter end={s.value} suffix={s.suffix} />
-                  </div>
-                  <div className="text-[11px] text-zinc-500 font-medium mt-1">{s.label}</div>
-                </div>
-              );
-            })}
-          </div>
-        </Reveal>
-      </section>
-
-      {/* Features */}
-      <section className="relative z-10 py-24 px-6 border-t border-white/[0.05]">
-        <div className="max-w-6xl mx-auto">
-          <Reveal className="text-center mb-14">
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 mb-4 rounded-full bg-white/[0.04] border border-white/[0.06] text-zinc-400 text-[11px] font-medium">
-              <Sparkles className="w-3 h-3 text-emerald-400" strokeWidth={2.25} />
-              What's inside
-            </div>
-            <h2 className="text-[32px] sm:text-[40px] font-bold tracking-tight text-zinc-50">
-              Built for <span className="bg-gradient-to-r from-emerald-300 to-emerald-400 bg-clip-text text-transparent">STEM mastery</span>
-            </h2>
-          </Reveal>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {features.map((f, i) => {
-              const Icon = f.icon;
-              return (
-                <Reveal key={i} delay={i * 100} variant={i % 2 === 0 ? 'from-left' : 'from-right'}>
-                  <div className="group relative p-7 rounded-2xl border border-white/[0.06] bg-zinc-900/30 hover:bg-zinc-900/60 hover:border-emerald-500/20 transition-all duration-300 overflow-hidden h-full shadow-lg hover:shadow-emerald-500/5">
-                    <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-500/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                    <div className="w-10 h-10 rounded-lg bg-emerald-500/[0.08] border border-emerald-500/15 flex items-center justify-center text-emerald-400 mb-5 transition-all group-hover:scale-110 group-hover:bg-emerald-500/20">
-                      <Icon className="w-[18px] h-[18px]" strokeWidth={2} />
-                    </div>
-                    <h3 className="text-[17px] font-bold tracking-tight text-zinc-50 mb-2">{f.title}</h3>
-                    <p className="text-zinc-400 text-[13.5px] leading-relaxed mb-5">{f.desc}</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {f.tags.map((tag, j) => (
-                        <span key={j} className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.05] text-zinc-400 group-hover:text-emerald-400/80 transition-colors">
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </Reveal>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* Highlight */}
-      <section className="relative z-10 py-20 px-6 border-t border-white/[0.05]">
-        <div className="max-w-3xl mx-auto text-center relative z-10">
+      <main className="relative z-10">
+        <section className="mx-auto flex max-w-6xl flex-col items-center px-5 pb-24 pt-24 text-center sm:px-6 sm:pt-32">
           <Reveal>
-            <div className="rounded-[32px] px-8 py-14 border border-white/[0.06] bg-gradient-to-br from-emerald-500/[0.1] via-zinc-950 to-emerald-500/10 shadow-2xl relative overflow-hidden group">
-              <div className="absolute inset-0 bg-emerald-500/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 mb-5 rounded-full bg-emerald-500/[0.08] border border-emerald-500/15 text-emerald-300 text-[11px] font-bold uppercase tracking-wider">
-                <ShieldCheck className="w-3.5 h-3.5" strokeWidth={2.5} />
-                CAPS certified
-              </div>
-              <h2 className="text-[28px] sm:text-[36px] font-bold tracking-tight leading-tight mb-6 text-zinc-50">
-                The only AI platform <span className="bg-gradient-to-r from-emerald-300 to-emerald-400 bg-clip-text text-transparent">purpose-built</span> for SA matric physics.
+            <Eyebrow icon={GraduationCap}>AI-powered Physical Sciences</Eyebrow>
+          </Reveal>
+
+          <Reveal delay={100}>
+            <h1 className="max-w-4xl text-balance text-[clamp(2.7rem,7vw,5.6rem)] font-semibold leading-[0.98] tracking-[-0.045em] text-zinc-50">
+              Understand the science.
+              <span className="block bg-gradient-to-r from-emerald-300 via-emerald-400 to-emerald-300 bg-clip-text text-transparent">
+                Master the physics.
+              </span>
+            </h1>
+          </Reveal>
+
+          <Reveal delay={220}>
+            <p className="mt-7 max-w-2xl text-[15px] leading-7 text-zinc-500 sm:text-[16px]">
+              Vector AI combines an intelligent tutor, interactive physics simulations,
+              and structured study tools into one learning environment built around the
+              South African CAPS curriculum.
+            </p>
+          </Reveal>
+
+          <Reveal delay={340}>
+            <div className="mt-9 flex flex-col items-center gap-3 sm:flex-row">
+              <ArrowButton onClick={go}>
+                <Play className="h-3.5 w-3.5 fill-current" />
+                Start learning
+              </ArrowButton>
+              <ArrowButton secondary onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}>
+                See how it works
+              </ArrowButton>
+            </div>
+          </Reveal>
+
+          <Reveal delay={480} className="w-full">
+            <PhysicsPreview />
+          </Reveal>
+
+          <Reveal delay={620} className="mt-8 w-full">
+            <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-center gap-x-7 gap-y-3 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-600">
+              <span className="flex items-center gap-2"><Check className="h-3 w-3 text-emerald-500/70" /> CAPS aligned</span>
+              <span className="flex items-center gap-2"><Check className="h-3 w-3 text-emerald-500/70" /> Interactive simulations</span>
+              <span className="flex items-center gap-2"><Check className="h-3 w-3 text-emerald-500/70" /> Voice tutoring</span>
+              <span className="flex items-center gap-2"><Check className="h-3 w-3 text-emerald-500/70" /> Study notes</span>
+            </div>
+          </Reveal>
+        </section>
+
+        {/* How it works */}
+        <section id="how-it-works" className="border-y border-white/[0.06] bg-white/[0.012] px-6 py-24">
+          <div className="mx-auto max-w-6xl">
+            <Reveal className="max-w-2xl">
+              <Eyebrow icon={Brain}>A better learning loop</Eyebrow>
+              <h2 className="text-[clamp(2rem,4vw,3.2rem)] font-semibold tracking-[-0.035em] text-zinc-50">
+                From confusion to intuition.
               </h2>
-              <p className="text-zinc-400 text-[15px] leading-relaxed max-w-xl mx-auto">
-                Every formula, every concept, every simulation is verified against the official CAPS curriculum for Grade 10, 11, and 12 — no guesswork, no off-syllabus content.
+              <p className="mt-4 max-w-xl text-[14px] leading-7 text-zinc-500">
+                Vector AI is designed around how difficult concepts are actually learned:
+                ask, visualise, then practise the idea until it makes sense.
               </p>
-            </div>
-          </Reveal>
-        </div>
-      </section>
+            </Reveal>
 
-      {/* Maker's Story */}
-      <section className="relative z-10 py-24 px-6 border-t border-white/[0.05] overflow-hidden">
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center gap-16">
-          <Reveal variant="from-left" className="flex-1">
-            <div className="relative">
-              <div className="absolute -inset-4 bg-emerald-500/20 blur-2xl rounded-full opacity-50 anim-glow" />
-              <div className="relative rounded-3xl border border-white/[0.1] bg-zinc-900/40 p-4 sm:p-6 backdrop-blur-md shadow-2xl">
-                <div className="aspect-square w-full rounded-2xl bg-zinc-800 flex items-center justify-center overflow-hidden">
-                   {/* Placeholder for Taro's photo or a cool avatar */}
-                   <div className="flex flex-col items-center gap-4 text-center px-8">
-                     <div className="w-20 h-20 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-                        <Cpu className="w-10 h-10 text-emerald-400" strokeWidth={1.5} />
-                     </div>
-                     <div>
-                        <h3 className="text-[18px] font-bold text-zinc-50">Taro Mukhalela</h3>
-                        <p className="text-emerald-400 text-[12px] font-bold uppercase tracking-[0.2em] mt-1">Founder & Developer</p>
-                     </div>
-                   </div>
-                </div>
-                <div className="mt-6 space-y-4">
-                  <div className="flex items-center gap-3">
-                    <span className="w-8 h-px bg-emerald-500/40" />
-                    <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest">Loding, Mpumalanga</span>
-                  </div>
-                  <p className="text-zinc-300 text-[14px] italic leading-relaxed">
-                    "I believe AI shouldn't just answer questions, it should build intuition. Vector AI is my contribution to making STEM education more visual and accessible for every South African student."
-                  </p>
-                </div>
-              </div>
+            <div className="mt-14 grid gap-px overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.06] md:grid-cols-3">
+              {workflow.map((step, i) => {
+                const Icon = step.icon;
+                return (
+                  <Reveal key={step.number} delay={i * 100}>
+                    <div className="group h-full bg-[#090b0a] p-7 transition-colors duration-300 hover:bg-[#0c100e]">
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono text-[10px] text-emerald-400/60">{step.number}</span>
+                        <Icon className="h-4 w-4 text-zinc-700 transition-colors group-hover:text-emerald-400" strokeWidth={1.7} />
+                      </div>
+                      <h3 className="mt-14 text-[18px] font-semibold tracking-tight text-zinc-100">{step.title}</h3>
+                      <p className="mt-3 text-[13px] leading-6 text-zinc-500">{step.text}</p>
+                    </div>
+                  </Reveal>
+                );
+              })}
             </div>
-          </Reveal>
-
-          <Reveal variant="from-right" className="flex-[1.2]">
-            <div className="inline-flex items-center gap-2 px-3 py-1 mb-6 rounded-full bg-emerald-500/[0.08] border border-emerald-500/15 text-emerald-300 text-[11px] font-bold uppercase tracking-wider">
-              Meet the Maker
-            </div>
-            <h2 className="text-[36px] sm:text-[48px] font-bold tracking-tight text-zinc-50 leading-tight mb-8">
-              A 14-year-old developer with a <span className="bg-gradient-to-r from-emerald-300 to-emerald-400 bg-clip-text text-transparent">massive vision.</span>
-            </h2>
-            <div className="space-y-6 text-zinc-400 text-[16px] leading-relaxed">
-              <p>
-                Based in <span className="text-zinc-100 font-semibold">Loding, Mpumalanga</span>, Taro Mukhalela is a self-taught web developer on a mission to democratise high-quality STEM education. 
-              </p>
-              <p>
-                Frustrated by the lack of interactive tools for the South African CAPS curriculum, Taro spent his after-school hours engineering Vector AI — a platform that combines state-of-the-art Large Language Models with real-time physics simulations.
-              </p>
-              <p>
-                Vector AI isn't just an app; it's a testament to what's possible when passion meets code. It's built for students, by a student who understands exactly what it takes to master matric physical science.
-              </p>
-            </div>
-            <div className="mt-10 flex flex-wrap gap-4">
-              <div className="flex items-center gap-2 text-[13px] font-bold text-zinc-300">
-                <Zap className="w-4 h-4 text-emerald-400" />
-                100% Student Built
-              </div>
-              <div className="flex items-center gap-2 text-[13px] font-bold text-zinc-300">
-                <Sparkles className="w-4 h-4 text-emerald-400" />
-                Mpumalanga Pride
-              </div>
-            </div>
-          </Reveal>
-        </div>
-      </section>
-
-      {/* FAQ */}
-      <section className="relative z-10 py-24 px-6 border-t border-white/[0.05]">
-        <div className="max-w-3xl mx-auto">
-          <Reveal className="text-center mb-12">
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 mb-4 rounded-full bg-white/[0.04] border border-white/[0.06] text-zinc-400 text-[11px] font-medium">
-              <Sparkles className="w-3 h-3 text-emerald-400" strokeWidth={2.25} />
-              Questions
-            </div>
-            <h2 className="text-[30px] font-bold tracking-tight text-zinc-50">
-              Got questions? <span className="bg-gradient-to-r from-emerald-300 to-emerald-400 bg-clip-text text-transparent">Answered.</span>
-            </h2>
-          </Reveal>
-          <div className="space-y-3">
-            {faqs.map((faq, i) => (
-              <FaqItem key={i} q={faq.q} a={faq.a} delay={i * 80} />
-            ))}
           </div>
-        </div>
-      </section>
+        </section>
+
+        {/* Features */}
+        <section className="px-6 py-28">
+          <div className="mx-auto max-w-6xl">
+            <Reveal className="text-center">
+              <Eyebrow icon={Sparkles}>Inside Vector AI</Eyebrow>
+              <h2 className="text-[clamp(2rem,4vw,3.2rem)] font-semibold tracking-[-0.035em] text-zinc-50">
+                One system. <span className="text-zinc-500">Every part of learning.</span>
+              </h2>
+            </Reveal>
+
+            <div className="mt-14 grid gap-4 md:grid-cols-2">
+              {features.map((feature, i) => (
+                <FeatureCard key={feature.title} {...feature} delay={i * 100} />
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* CAPS authority */}
+        <section className="border-y border-white/[0.06] px-6 py-28">
+          <div className="mx-auto grid max-w-6xl items-center gap-14 lg:grid-cols-[.8fr_1.2fr]">
+            <Reveal variant="from-left">
+              <div className="relative flex aspect-square max-w-md items-center justify-center overflow-hidden rounded-3xl border border-white/[0.08] bg-[#090b0a]">
+                <div className="absolute inset-10 rounded-full border border-emerald-400/10" />
+                <div className="absolute inset-20 rounded-full border border-emerald-400/[0.08]" />
+                <div className="absolute h-px w-4/5 bg-emerald-400/10" />
+                <div className="absolute h-4/5 w-px bg-emerald-400/10" />
+                <div className="relative flex h-20 w-20 items-center justify-center rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.06] text-emerald-400 shadow-[0_0_60px_-20px_rgba(52,211,153,.8)]">
+                  <ShieldCheck className="h-9 w-9" strokeWidth={1.5} />
+                </div>
+                <div className="absolute bottom-7 left-7 font-mono text-[9px] text-zinc-700">CAPS / PHYSICAL SCIENCES</div>
+                <div className="absolute right-7 top-7 font-mono text-[9px] text-zinc-700">G10 — G12</div>
+              </div>
+            </Reveal>
+
+            <Reveal variant="from-right">
+              <Eyebrow icon={ShieldCheck}>Built around CAPS</Eyebrow>
+              <h2 className="max-w-2xl text-[clamp(2rem,4vw,3.4rem)] font-semibold leading-[1.05] tracking-[-0.04em] text-zinc-50">
+                Learn the concepts that actually matter.
+              </h2>
+              <p className="mt-6 max-w-xl text-[14px] leading-7 text-zinc-500">
+                Generic AI can explain almost anything. Vector AI is designed to make
+                those explanations relevant to the South African Physical Sciences
+                curriculum, from foundational concepts through matric preparation.
+              </p>
+
+              <div className="mt-8 grid max-w-xl gap-3 sm:grid-cols-2">
+                {[
+                  'Grade 10–12 Physical Sciences',
+                  'Physics concepts & formulas',
+                  'Worked examples',
+                  'Interactive visual learning',
+                ].map((item) => (
+                  <div key={item} className="flex items-center gap-2.5 text-[11px] font-medium text-zinc-400">
+                    <CircleDot className="h-3.5 w-3.5 text-emerald-400/70" />
+                    {item}
+                  </div>
+                ))}
+              </div>
+            </Reveal>
+          </div>
+        </section>
+
+        {/* Founder */}
+        <section className="px-6 py-28">
+          <div className="mx-auto max-w-5xl">
+            <Reveal>
+              <div className="overflow-hidden rounded-3xl border border-white/[0.08] bg-white/[0.018]">
+                <div className="grid lg:grid-cols-[.8fr_1.2fr]">
+                  <div className="relative flex min-h-[360px] items-end overflow-hidden border-b border-white/[0.07] bg-[#090b0a] p-7 lg:border-b-0 lg:border-r">
+                    <div className="absolute inset-0 opacity-30">
+                      <div
+                        className="absolute inset-0"
+                        style={{
+                          backgroundImage:
+                            'linear-gradient(rgba(52,211,153,.08) 1px, transparent 1px), linear-gradient(90deg, rgba(52,211,153,.08) 1px, transparent 1px)',
+                          backgroundSize: '42px 42px',
+                          maskImage: 'radial-gradient(circle at 50% 45%, black, transparent 72%)',
+                          WebkitMaskImage: 'radial-gradient(circle at 50% 45%, black, transparent 72%)',
+                        }}
+                      />
+                    </div>
+
+                    <div className="relative">
+                      <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border border-emerald-400/15 bg-emerald-400/[0.06] text-emerald-400">
+                        <Cpu className="h-7 w-7" strokeWidth={1.5} />
+                      </div>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-400/70">
+                        Founder & developer
+                      </p>
+                      <h3 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-100">Taro Mukhalela</h3>
+                      <p className="mt-1 text-[11px] text-zinc-600">Mpumalanga, South Africa</p>
+                    </div>
+                  </div>
+
+                  <div className="p-8 sm:p-10 lg:p-14">
+                    <Eyebrow icon={Sparkles}>The idea behind Vector AI</Eyebrow>
+                    <h2 className="max-w-xl text-[clamp(2rem,4vw,3rem)] font-semibold leading-[1.05] tracking-[-0.04em] text-zinc-50">
+                      Built by a student. Designed for students.
+                    </h2>
+                    <div className="mt-6 space-y-4 text-[13.5px] leading-7 text-zinc-500">
+                      <p>
+                        Vector AI began with a simple idea: difficult science should not
+                        have to stay abstract just because a textbook cannot show you what
+                        is happening.
+                      </p>
+                      <p>
+                        The platform combines modern AI with interactive visualisation to
+                        make physical science more intuitive, accessible, and connected to
+                        the curriculum students are actually studying.
+                      </p>
+                    </div>
+                    <div className="mt-8 flex flex-wrap gap-5 text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-600">
+                      <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 text-emerald-400" /> Student built</span>
+                      <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 text-emerald-400" /> STEM focused</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Reveal>
+          </div>
+        </section>
+
+        {/* CTA */}
+        <section className="px-6 pb-28">
+          <Reveal>
+            <div className="relative mx-auto max-w-5xl overflow-hidden rounded-3xl border border-emerald-400/15 bg-emerald-400/[0.045] px-7 py-16 text-center sm:px-12">
+              <div className="absolute left-1/2 top-0 h-40 w-72 -translate-x-1/2 rounded-full bg-emerald-400/[0.08] blur-3xl" />
+              <div className="relative">
+                <Eyebrow icon={GraduationCap}>Ready to learn differently?</Eyebrow>
+                <h2 className="mx-auto max-w-2xl text-[clamp(2rem,5vw,3.5rem)] font-semibold leading-[1.02] tracking-[-0.04em] text-zinc-50">
+                  Stop memorising the physics.
+                  <span className="block text-emerald-300">Start understanding it.</span>
+                </h2>
+                <p className="mx-auto mt-5 max-w-lg text-[13.5px] leading-6 text-zinc-500">
+                  Explore Vector AI and build the intuition behind the equations.
+                </p>
+                <div className="mt-8">
+                  <ArrowButton onClick={go}>
+                    <Play className="h-3.5 w-3.5 fill-current" />
+                    Launch Vector AI
+                  </ArrowButton>
+                </div>
+              </div>
+            </div>
+          </Reveal>
+        </section>
+
+        {/* FAQ */}
+        <section className="border-t border-white/[0.06] px-6 py-24">
+          <div className="mx-auto max-w-3xl">
+            <Reveal className="mb-12 text-center">
+              <Eyebrow icon={BookOpen}>Questions</Eyebrow>
+              <h2 className="text-[clamp(2rem,4vw,2.8rem)] font-semibold tracking-[-0.035em] text-zinc-50">
+                Good questions deserve clear answers.
+              </h2>
+            </Reveal>
+
+            <div className="space-y-2.5">
+              {faqs.map((faq, i) => (
+                <FaqItem key={faq.q} {...faq} delay={i * 70} />
+              ))}
+            </div>
+          </div>
+        </section>
+      </main>
 
       {/* Footer */}
-      <footer className="relative z-10 px-6 py-16 text-center border-t border-white/[0.05] bg-zinc-950">
-        <Reveal>
-          <div className="flex items-center justify-center gap-2 mb-4">
-            <div className="w-6 h-6 rounded-md bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center">
-              <Zap className="w-3 h-3 text-zinc-950" strokeWidth={2.75} />
+      <footer className="border-t border-white/[0.06] px-6 py-12">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-5 text-center sm:flex-row sm:text-left">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-400 text-zinc-950">
+              <Atom className="h-3.5 w-3.5" strokeWidth={2.4} />
             </div>
-            <span className="font-bold text-[14px] tracking-tight text-zinc-200">Vector AI</span>
-            <span className="text-[9.5px] tracking-[0.18em] text-emerald-400/80 font-bold uppercase border border-emerald-500/15 rounded-full px-2 py-0.5">STEM OS</span>
+            <div>
+              <span className="block text-[13px] font-semibold text-zinc-200">Vector AI</span>
+              <span className="text-[8px] font-bold uppercase tracking-[0.16em] text-zinc-600">STEM learning system</span>
+            </div>
           </div>
-          <p className="text-zinc-400 text-[13px] mb-1 font-medium">AI-accelerated learning — built by Taro Mukhalela</p>
-          <p className="text-zinc-600 text-[11px] tracking-wider uppercase font-bold opacity-50">© {new Date().getFullYear()} Vector AI. All rights reserved.</p>
-        </Reveal>
+
+          <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-700">
+            AI-accelerated learning · {new Date().getFullYear()} Vector AI
+          </div>
+        </div>
       </footer>
     </div>
   );

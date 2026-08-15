@@ -1206,7 +1206,7 @@ def _groq_generate_with_timeout(prompt, api_key, timeout_seconds):
     def worker():
         try:
             # Use a cached client to avoid per-request construction latency
-            model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+            model = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
             max_tokens = env_int("GROQ_MAX_TOKENS", 2048, min_value=64, max_value=8192)
 
             client = get_groq_client(api_key)
