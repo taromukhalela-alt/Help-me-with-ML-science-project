@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import GridDistortion from '../components/GridDistortion';
 import { useAuth } from '../context/AuthContext';
 import {
   ArrowRight,
@@ -25,13 +26,15 @@ import {
 
 const ScientificBackground = () => (
   <div className="pointer-events-none absolute inset-0 overflow-hidden">
-    <div className="absolute left-1/2 top-[-18rem] h-[42rem] w-[42rem] -translate-x-1/2 rounded-full bg-emerald-500/[0.07] blur-[120px]" />
+    {/* Subtle radial glow — kept very dim so it doesn't dominate */}
+    <div className="absolute left-1/2 top-[-18rem] h-[42rem] w-[42rem] -translate-x-1/2 rounded-full bg-emerald-500/[0.05] blur-[140px]" />
 
+    {/* Single faint grid — masked to top half only */}
     <div
-      className="absolute inset-0 opacity-[0.14]"
+      className="absolute inset-0 opacity-[0.09]"
       style={{
         backgroundImage:
-          'linear-gradient(rgba(255,255,255,0.045) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.045) 1px, transparent 1px)',
+          'linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px)',
         backgroundSize: '64px 64px',
         maskImage:
           'radial-gradient(ellipse 75% 48% at 50% 0%, black 5%, transparent 78%)',
@@ -39,9 +42,6 @@ const ScientificBackground = () => (
           'radial-gradient(ellipse 75% 48% at 50% 0%, black 5%, transparent 78%)',
       }}
     />
-
-    <div className="absolute left-[8%] top-[18%] h-px w-24 rotate-[24deg] bg-gradient-to-r from-transparent via-emerald-400/20 to-transparent" />
-    <div className="absolute right-[10%] top-[26%] h-px w-32 -rotate-[30deg] bg-gradient-to-r from-transparent via-emerald-400/15 to-transparent" />
   </div>
 );
 
@@ -91,9 +91,8 @@ const Reveal = ({ children, className = '', delay = 0, variant = 'from-bottom' }
   );
 };
 
-const Eyebrow = ({ icon: Icon = Sparkles, children }) => (
-  <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-emerald-400/15 bg-emerald-400/[0.06] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-300">
-    <Icon className="h-3.5 w-3.5" strokeWidth={2.2} />
+const Eyebrow = ({ children }) => (
+  <div className="mb-5 inline-flex items-center rounded-full border border-emerald-400/20 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-emerald-400/70">
     {children}
   </div>
 );
@@ -103,12 +102,12 @@ const ArrowButton = ({ children, onClick, secondary = false }) => (
     onClick={onClick}
     className={
       secondary
-        ? 'group inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.035] px-5 py-3 text-[13px] font-semibold text-zinc-200 transition-all duration-300 hover:border-white/15 hover:bg-white/[0.07] hover:text-white'
-        : 'group inline-flex items-center gap-2 rounded-xl bg-emerald-400 px-5 py-3 text-[13px] font-bold text-zinc-950 shadow-[0_12px_35px_-15px_rgba(52,211,153,.75)] transition-all duration-300 hover:-translate-y-0.5 hover:bg-emerald-300 hover:shadow-[0_16px_40px_-15px_rgba(52,211,153,.9)]'
+        ? 'group inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-5 py-3 text-[13px] font-medium text-zinc-300 transition-all duration-200 hover:border-white/[0.14] hover:bg-white/[0.06] hover:text-white'
+        : 'group inline-flex items-center gap-2 rounded-xl bg-emerald-400 px-5 py-3 text-[13px] font-semibold text-zinc-950 shadow-[0_4px_20px_rgba(52,211,153,.25)] transition-all duration-200 hover:-translate-y-px hover:bg-emerald-300 hover:shadow-[0_6px_24px_rgba(52,211,153,.35)]'
     }
   >
     {children}
-    <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-0.5" />
+    <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
   </button>
 );
 
@@ -297,9 +296,9 @@ const ModuleVisual = ({ type }) => {
 
 const FeatureCard = ({ icon: Icon, title, desc, tags, visual, delay }) => (
   <Reveal delay={delay}>
-    <article className="group h-full rounded-2xl border border-white/[0.07] bg-white/[0.018] p-6 transition-all duration-500 hover:-translate-y-1 hover:border-emerald-400/15 hover:bg-white/[0.035]">
+    <article className="group h-full rounded-2xl border border-white/[0.06] bg-white/[0.015] p-6 transition-all duration-300 hover:-translate-y-px hover:border-white/[0.10] hover:bg-white/[0.025]">
       <div className="flex items-start justify-between">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-emerald-400/10 bg-emerald-400/[0.06] text-emerald-400 transition-transform duration-500 group-hover:scale-105">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-emerald-400/10 bg-emerald-400/[0.05] text-emerald-400">
           <Icon className="h-[18px] w-[18px]" strokeWidth={1.8} />
         </div>
         <span className="font-mono text-[9px] text-zinc-700">0{delay / 100 + 1}</span>
@@ -369,6 +368,39 @@ const FaqItem = ({ q, a, delay }) => {
 const Landing = ({ onNavigate }) => {
   const { isAuthenticated } = useAuth();
   const go = () => onNavigate(isAuthenticated ? 'chat' : 'auth');
+
+  // ── Hero warp effect ──────────────────────────────────────────
+  // Animates feDisplacementMap.scale from 40 → 0 once on mount.
+  // After the animation completes the filter is removed entirely
+  // so it has zero ongoing performance cost.
+  const warpFilterRef = useRef(null);
+  useEffect(() => {
+    const el = warpFilterRef.current;
+    if (!el) return;
+
+    const duration = 750;
+    const start = performance.now();
+    const from = 40;
+
+    // ease-out cubic
+    const ease = (t) => 1 - Math.pow(1 - t, 3);
+
+    let raf;
+    const tick = (now) => {
+      const progress = Math.min((now - start) / duration, 1);
+      const scale = from * (1 - ease(progress));
+      el.setAttribute('scale', scale.toString());
+      if (progress < 1) {
+        raf = requestAnimationFrame(tick);
+      } else {
+        // Clean up: remove filter from h1 so GPU resources are freed
+        const h1 = document.getElementById('hero-heading');
+        if (h1) h1.style.filter = 'none';
+      }
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
 
   const features = [
     {
@@ -442,7 +474,7 @@ const Landing = ({ onNavigate }) => {
   ];
 
   return (
-    <div className="min-h-dvh overflow-x-hidden bg-[#070908] font-sans text-zinc-100 antialiased selection:bg-emerald-400/20 selection:text-emerald-200">
+    <div className="min-h-dvh overflow-x-hidden bg-[#070908] text-zinc-100 selection:bg-emerald-400/20 selection:text-emerald-200">
       <ScientificBackground />
 
       {/* Navbar */}
@@ -450,7 +482,7 @@ const Landing = ({ onNavigate }) => {
         <nav className="mx-auto flex max-w-6xl items-center justify-between rounded-2xl border border-white/[0.08] bg-[#070908]/80 px-4 py-2.5 shadow-2xl shadow-black/20 backdrop-blur-2xl">
           <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="flex items-center gap-2.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-300/20 bg-emerald-400 text-zinc-950 shadow-[0_8px_25px_-10px_rgba(52,211,153,.8)]">
-              <Atom className="h-4 w-4" strokeWidth={2.4} />
+              <Zap className="h-4 w-4" strokeWidth={2.4} />
             </div>
             <div className="text-left leading-none">
               <span className="block text-[14px] font-semibold tracking-tight text-zinc-50">Vector AI</span>
@@ -478,59 +510,109 @@ const Landing = ({ onNavigate }) => {
 
       {/* Hero */}
       <main className="relative z-10">
-        <section className="mx-auto flex max-w-6xl flex-col items-center px-5 pb-24 pt-24 text-center sm:px-6 sm:pt-32">
-          <Reveal>
-            <Eyebrow icon={GraduationCap}>AI-powered Physical Sciences</Eyebrow>
-          </Reveal>
+        {/* Full-bleed GridDistortion background for the hero */}
+        <div style={{ position: 'relative' }}>
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              zIndex: 0,
+              overflow: 'hidden',
+            }}
+          >
+            <GridDistortion
+              imageSrc="https://images.unsplash.com/photo-1635070041078-e363dbe005cb?w=1920&q=80"
+              grid={12}
+              mouse={0.12}
+              strength={0.18}
+              relaxation={0.92}
+            />
+            {/* Dark overlay to keep text legible */}
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                background: 'radial-gradient(ellipse 80% 60% at 50% 50%, rgba(7,9,8,0.5) 0%, rgba(7,9,8,0.82) 70%, rgba(7,9,8,0.97) 100%)',
+                pointerEvents: 'none',
+              }}
+            />
+          </div>
 
-          <Reveal delay={100}>
-            <h1 className="max-w-4xl text-balance text-[clamp(2.7rem,7vw,5.6rem)] font-semibold leading-[0.98] tracking-[-0.045em] text-zinc-50">
-              Understand the science.
-              <span className="block bg-gradient-to-r from-emerald-300 via-emerald-400 to-emerald-300 bg-clip-text text-transparent">
-                Master the physics.
-              </span>
-            </h1>
-          </Reveal>
+          {/* SVG filter definition — hidden, zero size */}
+          <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true">
+            <defs>
+              <filter id="hero-warp" x="-10%" y="-10%" width="120%" height="120%" colorInterpolationFilters="sRGBLinear">
+                <feTurbulence type="fractalNoise" baseFrequency="0.015" numOctaves="2" result="noise" />
+                <feDisplacementMap
+                  ref={warpFilterRef}
+                  in="SourceGraphic"
+                  in2="noise"
+                  scale="40"
+                  xChannelSelector="R"
+                  yChannelSelector="G"
+                />
+              </filter>
+            </defs>
+          </svg>
 
-          <Reveal delay={220}>
-            <p className="mt-7 max-w-2xl text-[15px] leading-7 text-zinc-500 sm:text-[16px]">
-              Vector AI combines an intelligent tutor, interactive physics simulations,
-              and structured study tools into one learning environment built around the
-              South African CAPS curriculum.
-            </p>
-          </Reveal>
+          <section className="relative z-10 mx-auto flex max-w-6xl flex-col items-center px-5 pb-24 pt-24 text-center sm:px-6 sm:pt-32">
+            <Reveal>
+              <Eyebrow>AI-powered Physical Sciences</Eyebrow>
+            </Reveal>
 
-          <Reveal delay={340}>
-            <div className="mt-9 flex flex-col items-center gap-3 sm:flex-row">
-              <ArrowButton onClick={go}>
-                <Play className="h-3.5 w-3.5 fill-current" />
-                Start learning
-              </ArrowButton>
-              <ArrowButton secondary onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}>
-                See how it works
-              </ArrowButton>
-            </div>
-          </Reveal>
+            <Reveal delay={100}>
+              <h1
+                id="hero-heading"
+                style={{ filter: 'url(#hero-warp)' }}
+                className="max-w-4xl text-balance text-[clamp(2.7rem,7vw,5.4rem)] font-semibold leading-[1.02] tracking-[-0.03em] text-zinc-50"
+              >
+                Understand the science.
+                <span className="block bg-gradient-to-r from-emerald-300 to-emerald-400 bg-clip-text text-transparent">
+                  Master the physics.
+                </span>
+              </h1>
+            </Reveal>
 
-          <Reveal delay={480} className="w-full">
-            <PhysicsPreview />
-          </Reveal>
+            <Reveal delay={220}>
+              <p className="mt-7 max-w-2xl text-[15px] leading-7 text-zinc-500 sm:text-[16px]">
+                Vector AI combines an intelligent tutor, interactive physics simulations,
+                and structured study tools into one learning environment built around the
+                South African CAPS curriculum.
+              </p>
+            </Reveal>
 
-          <Reveal delay={620} className="mt-8 w-full">
-            <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-center gap-x-7 gap-y-3 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-600">
-              <span className="flex items-center gap-2"><Check className="h-3 w-3 text-emerald-500/70" /> CAPS aligned</span>
-              <span className="flex items-center gap-2"><Check className="h-3 w-3 text-emerald-500/70" /> Interactive simulations</span>
-              <span className="flex items-center gap-2"><Check className="h-3 w-3 text-emerald-500/70" /> Voice tutoring</span>
-              <span className="flex items-center gap-2"><Check className="h-3 w-3 text-emerald-500/70" /> Study notes</span>
-            </div>
-          </Reveal>
-        </section>
+            <Reveal delay={340}>
+              <div className="mt-9 flex flex-col items-center gap-3 sm:flex-row">
+                <ArrowButton onClick={go}>
+                  <Play className="h-3.5 w-3.5 fill-current" />
+                  Start learning
+                </ArrowButton>
+                <ArrowButton secondary onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}>
+                  See how it works
+                </ArrowButton>
+              </div>
+            </Reveal>
+
+            <Reveal delay={480} className="w-full">
+              <PhysicsPreview />
+            </Reveal>
+
+            <Reveal delay={620} className="mt-8 w-full">
+              <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-center gap-x-7 gap-y-3 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-600">
+                <span className="flex items-center gap-2"><Check className="h-3 w-3 text-emerald-500/70" /> CAPS aligned</span>
+                <span className="flex items-center gap-2"><Check className="h-3 w-3 text-emerald-500/70" /> Interactive simulations</span>
+                <span className="flex items-center gap-2"><Check className="h-3 w-3 text-emerald-500/70" /> Voice tutoring</span>
+                <span className="flex items-center gap-2"><Check className="h-3 w-3 text-emerald-500/70" /> Study notes</span>
+              </div>
+            </Reveal>
+          </section>
+        </div>
 
         {/* How it works */}
         <section id="how-it-works" className="border-y border-white/[0.06] bg-white/[0.012] px-6 py-24">
           <div className="mx-auto max-w-6xl">
             <Reveal className="max-w-2xl">
-              <Eyebrow icon={Brain}>A better learning loop</Eyebrow>
+              <Eyebrow>A better learning loop</Eyebrow>
               <h2 className="text-[clamp(2rem,4vw,3.2rem)] font-semibold tracking-[-0.035em] text-zinc-50">
                 From confusion to intuition.
               </h2>
@@ -564,7 +646,7 @@ const Landing = ({ onNavigate }) => {
         <section className="px-6 py-28">
           <div className="mx-auto max-w-6xl">
             <Reveal className="text-center">
-              <Eyebrow icon={Sparkles}>Inside Vector AI</Eyebrow>
+              <Eyebrow>Inside Vector AI</Eyebrow>
               <h2 className="text-[clamp(2rem,4vw,3.2rem)] font-semibold tracking-[-0.035em] text-zinc-50">
                 One system. <span className="text-zinc-500">Every part of learning.</span>
               </h2>
@@ -596,7 +678,7 @@ const Landing = ({ onNavigate }) => {
             </Reveal>
 
             <Reveal variant="from-right">
-              <Eyebrow icon={ShieldCheck}>Built around CAPS</Eyebrow>
+              <Eyebrow>Built around CAPS</Eyebrow>
               <h2 className="max-w-2xl text-[clamp(2rem,4vw,3.4rem)] font-semibold leading-[1.05] tracking-[-0.04em] text-zinc-50">
                 Learn the concepts that actually matter.
               </h2>
@@ -656,7 +738,7 @@ const Landing = ({ onNavigate }) => {
                   </div>
 
                   <div className="p-8 sm:p-10 lg:p-14">
-                    <Eyebrow icon={Sparkles}>The idea behind Vector AI</Eyebrow>
+                    <Eyebrow>The idea behind Vector AI</Eyebrow>
                     <h2 className="max-w-xl text-[clamp(2rem,4vw,3rem)] font-semibold leading-[1.05] tracking-[-0.04em] text-zinc-50">
                       Built by a student. Designed for students.
                     </h2>
@@ -689,7 +771,7 @@ const Landing = ({ onNavigate }) => {
             <div className="relative mx-auto max-w-5xl overflow-hidden rounded-3xl border border-emerald-400/15 bg-emerald-400/[0.045] px-7 py-16 text-center sm:px-12">
               <div className="absolute left-1/2 top-0 h-40 w-72 -translate-x-1/2 rounded-full bg-emerald-400/[0.08] blur-3xl" />
               <div className="relative">
-                <Eyebrow icon={GraduationCap}>Ready to learn differently?</Eyebrow>
+                <Eyebrow>Ready to learn differently?</Eyebrow>
                 <h2 className="mx-auto max-w-2xl text-[clamp(2rem,5vw,3.5rem)] font-semibold leading-[1.02] tracking-[-0.04em] text-zinc-50">
                   Stop memorising the physics.
                   <span className="block text-emerald-300">Start understanding it.</span>
@@ -712,7 +794,7 @@ const Landing = ({ onNavigate }) => {
         <section className="border-t border-white/[0.06] px-6 py-24">
           <div className="mx-auto max-w-3xl">
             <Reveal className="mb-12 text-center">
-              <Eyebrow icon={BookOpen}>Questions</Eyebrow>
+              <Eyebrow>Questions</Eyebrow>
               <h2 className="text-[clamp(2rem,4vw,2.8rem)] font-semibold tracking-[-0.035em] text-zinc-50">
                 Good questions deserve clear answers.
               </h2>
