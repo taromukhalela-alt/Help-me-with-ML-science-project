@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
@@ -23,6 +23,7 @@ const ScreenReaderTitle = ({ children }) => (
 
 function App() {
   const { isAuthenticated, loading, csrfToken } = useAuth();
+  const location = useLocation();
   const navigate = useNavigate();
 
   useAnalytics();
@@ -71,6 +72,16 @@ function App() {
     );
   }
 
+  if (location.pathname === '/') {
+    return (
+      <ToastProvider>
+        <Landing onNavigate={handleAuthNavigation} />
+        <Analytics />
+        <SpeedInsights />
+      </ToastProvider>
+    );
+  }
+
   const handleSelectTopic = (promptText) => {
     setSharedTriggerPrompt(promptText);
     navigate('/chat');
@@ -86,7 +97,6 @@ function App() {
       {showOnboarding && <Onboarding onComplete={() => setShowOnboarding(false)} />}
       <Layout>
         <Routes>
-          <Route path="/" element={<Navigate to="/chat" replace />} />
           <Route
             path="/chat"
             element={(

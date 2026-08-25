@@ -4,43 +4,43 @@
 
 [[redirects]]
   from = "/api/*"
-  to = "https://vector-ai.up.railway.app/api/:splat"
+  to = "https://vector-ai-1uiq.onrender.com/api/:splat"
   status = 200
   force = true
 
 [[redirects]]
   from = "/auth/*"
-  to = "https://vector-ai.up.railway.app/auth/:splat"
+  to = "https://vector-ai-1uiq.onrender.com/auth/:splat"
   status = 200
   force = true
 
 [[redirects]]
   from = "/match-animation"
-  to = "https://vector-ai.up.railway.app/match-animation"
+  to = "https://vector-ai-1uiq.onrender.com/match-animation"
   status = 200
   force = true
 
 [[redirects]]
   from = "/voice-tutor"
-  to = "https://vector-ai.up.railway.app/voice-tutor"
+  to = "https://vector-ai-1uiq.onrender.com/voice-tutor"
   status = 200
   force = true
 
 [[redirects]]
   from = "/check_auth"
-  to = "https://vector-ai.up.railway.app/api/:splat"
+  to = "https://vector-ai-1uiq.onrender.com/check_auth"
   status = 200
   force = true
 
 [[redirects]]
   from = "/logout"
-  to = "https://vector-ai.up.railway.app/logout"
+  to = "https://vector-ai-1uiq.onrender.com/logout"
   status = 200
   force = true
 
 [[redirects]]
   from = "/favicon.ico"
-  to = "https://vector-ai.up.railway.app/favicon.ico"
+  to = "https://vector-ai-1uiq.onrender.com/favicon.ico"
   status = 200
   force = true
 
