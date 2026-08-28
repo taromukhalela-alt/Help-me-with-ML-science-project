@@ -263,22 +263,6 @@ CAMB_TTS_VOICE_ID = env_int("CAMB_TTS_VOICE_ID", 147320, min_value=1)
 
 rate_limit_events = defaultdict(deque)
 chat_latency_events = defaultdict(lambda: deque(maxlen=50))
-ANIMATION_INTENTS = {
-    "projectile_motion",
-    "waves",
-    "forces",
-    "momentum",
-    "energy",
-    "gravitation",
-    "electricity",
-    "magnetism",
-    "optics",
-    "nuclear",
-    "thermodynamics",
-    "shm",
-    "electrostatics",
-    "chemistry",
-}
 ANIMATION_CHOICES = {
     "projectile": "Projectile Motion",
     "waves": "Wave Motion",
@@ -2040,105 +2024,6 @@ def metrics():
     )
 
 
-def _generate_dashboard_payload():
-    now = datetime.now()
-    if not current_user.is_authenticated:
-        return {}
-
-    history = (
-        Conversation.query.filter_by(user_id=current_user.id)
-        .order_by(Conversation.timestamp.desc())
-        .all()
-    )
-    sessions = build_sessions([c.to_dict() for c in history])
-    questions_asked = len(history)
-    confidences = [c.confidence for c in history if c.confidence is not None]
-    avg_confidence = (
-        round(sum(confidences) / len(confidences), 1) if confidences else 0.0
-    )
-    raw_accuracy = config.get("accuracy") if isinstance(config, dict) else None
-    if raw_accuracy is None:
-        model_accuracy = 0.0
-    else:
-        model_accuracy = (
-            float(raw_accuracy) * 100
-            if float(raw_accuracy) <= 1
-            else float(raw_accuracy)
-        )
-        model_accuracy = round(model_accuracy, 1)
-
-    intent_counts = Counter(c.intent or "unknown" for c in history)
-    animation_ready = sum(
-        count for intent, count in intent_counts.items() if intent in ANIMATION_INTENTS
-    )
-    inference_latency_ms = average_recent_chat_latency(current_user.id)
-
-    daily_confidence = []
-    today_ordinal = now.date().toordinal()
-    for days_back in range(11, -1, -1):
-        day = today_ordinal - days_back
-        day_values = [
-            c.confidence
-            for c in history
-            if c.confidence is not None
-            and c.timestamp
-            and c.timestamp.date().toordinal() == day
-        ]
-        daily_confidence.append(
-            round((sum(day_values) / len(day_values)) / 100, 3) if day_values else 0.0
-        )
-
-    top_intents = [count for _intent, count in intent_counts.most_common(8)]
-    while len(top_intents) < 8:
-        top_intents.append(0)
-
-    stats = {
-        "model_accuracy": model_accuracy,
-        "questions_asked": questions_asked,
-        "avg_confidence": avg_confidence,
-        "active_simulations": animation_ready,
-        "inference_latency_ms": inference_latency_ms,
-    }
-    gauge_value = round(avg_confidence / 100, 2) if avg_confidence else 0.0
-
-    recent_questions = []
-    for entry in history[:6]:
-        recent_questions.append(
-            {
-                "question": entry.message[:48],
-                "confidence": entry.confidence or 0,
-                "time": (
-                    entry.timestamp.strftime("%b %d, %H:%M") if entry.timestamp else ""
-                ),
-            }
-        )
-
-    session_cards = []
-    for session_entry in sessions[:6]:
-        session_cards.append(
-            {
-                "chat_id": session_entry["chat_id"],
-                "title": session_entry["title"],
-                "count": session_entry["count"],
-                "last_time": session_entry["last_time"],
-            }
-        )
-
-    return {
-        "timestamp": now.isoformat(),
-        "stats": stats,
-        "charts": {"line": daily_confidence, "bar": top_intents, "gauge": gauge_value},
-        "recent_questions": recent_questions,
-        "sessions": session_cards,
-    }
-
-
-def dashboard_data():
-    """Dashboard live data feed."""
-    payload = _generate_dashboard_payload()
-    return jsonify(payload)
-
-
 # -------------------------------
 # Dashboard / History
 # -------------------------------
@@ -2610,116 +2495,6 @@ def chat():
             "tool_metadata": tool_metadata,
         }
     )
-
-
-def get_dashboard_data():
-    """Returns real metrics and syllabus progress for the dashboard."""
-    try:
-        notes_count = Note.query.filter_by(user_id=current_user.id).count()
-        convs = (
-            Conversation.query.filter_by(user_id=current_user.id)
-            .order_by(Conversation.timestamp.desc())
-            .limit(100)
-            .all()
-        )
-        conv_count = len(convs)
-
-        # Accuracy derived from model confidence in recent interactions
-        confidences = [c.confidence for c in convs if c.confidence is not None]
-        base_accuracy = (
-            round(sum(confidences) / len(confidences), 1) if confidences else 95.0
-        )
-        accuracy = min(100.0, base_accuracy + min(2.0, notes_count * 0.1))
-
-        # Real latency from recorded events
-        latency = average_recent_chat_latency(current_user.id)
-        if latency <= 0:
-            latency = 14.5  # Default fallback
-
-        alignment = 100.0  # Standard compliance
-
-        # Group intents to calculate real progress per CAPS topic
-        intent_counts = Counter(c.intent for c in convs if c.intent)
-
-        def get_topic_prog(intents, base_weight=15):
-            count = sum(intent_counts.get(i, 0) for i in intents)
-            # Progress is a factor of interactions + related notes
-            prog = min(100, base_weight + (count * 5) + (notes_count * 2))
-            return int(prog)
-
-        syllabus = [
-            {
-                "title": "Newton's Laws & Forces",
-                "progress": get_topic_prog(["forces", "dynamics"]),
-                "grade": "Gr 11/12",
-                "category": "Physics",
-            },
-            {
-                "title": "Projectile Motion",
-                "progress": get_topic_prog(["projectile_motion", "kinematics"]),
-                "grade": "Gr 12",
-                "category": "Physics",
-            },
-            {
-                "title": "Reaction Rates & Energy",
-                "progress": get_topic_prog(["chemistry"]),
-                "grade": "Gr 12",
-                "category": "Chemistry",
-            },
-            {
-                "title": "Acids & Bases",
-                "progress": get_topic_prog(
-                    ["unit_conversion"]
-                ),  # Placeholder for acid/base intent
-                "grade": "Gr 11/12",
-                "category": "Chemistry",
-            },
-            {
-                "title": "Electrochemistry",
-                "progress": get_topic_prog(["electricity", "electrostatics"]),
-                "grade": "Gr 12",
-                "category": "Chemistry",
-            },
-            {
-                "title": "Doppler Effect & Waves",
-                "progress": get_topic_prog(["waves"]),
-                "grade": "Gr 11/12",
-                "category": "Physics",
-            },
-        ]
-
-        return jsonify(
-            {
-                "success": True,
-                "metrics": [
-                    {
-                        "label": "Model accuracy",
-                        "value": accuracy,
-                        "max": 100,
-                        "unit": "%",
-                        "desc": "Calculated from average semantic confidence levels",
-                    },
-                    {
-                        "label": "Inference latency",
-                        "value": latency,
-                        "max": 50,
-                        "unit": "ms",
-                        "desc": "Real-time median response synthesis time",
-                    },
-                    {
-                        "label": "CAPS alignment",
-                        "value": alignment,
-                        "max": 100,
-                        "unit": "%",
-                        "desc": "Syllabus criteria compliance match",
-                    },
-                ],
-                "syllabus": syllabus,
-            }
-        )
-    except Exception as e:
-        logger.error(f"Dashboard data error: {e}")
-        return jsonify({"success": False, "error": str(e)}), 500
 
 
 # ============ MEMORY / RAG API ============
@@ -3581,8 +3356,6 @@ from backend.mvc.services.note_service import NoteService
 app.extensions["dashboard_service"] = DashboardService(
     average_recent_chat_latency,
     session_builder=build_sessions,
-    animation_intents=ANIMATION_INTENTS,
-    model_accuracy_reader=lambda: config.get("accuracy") if isinstance(config, dict) else None,
 )
 app.extensions["note_service"] = NoteService(validate_note_payload, NOTE_LIST_LIMIT)
 register_feature_routes(app)

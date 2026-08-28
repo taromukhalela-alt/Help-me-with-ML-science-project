@@ -5,7 +5,7 @@ os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 import pytest
 
 import backend.app as app_module
-from backend.models.database import User, db
+from backend.models.database import Conversation, User, db
 
 
 @pytest.fixture(autouse=True)
@@ -209,9 +209,52 @@ def test_dashboard_api_returns_real_empty_metrics_for_authenticated_user():
 
     assert response.status_code == 200
     assert payload["stats"]["questions_asked"] == 0
-    assert payload["stats"]["active_simulations"] == 0
-    assert payload["charts"]["line"] == [0.0] * 12
-    assert payload["charts"]["bar"] == [0] * 8
+    assert payload["stats"]["notes_saved"] == 0
+    assert payload["stats"]["avg_confidence"] is None
+    assert payload["stats"]["inference_latency_ms"] is None
+    assert payload["charts"]["line"] == [None] * 12
+    assert payload["charts"]["bar"] == []
+    assert payload["charts"]["gauge"] is None
+    assert all(metric["value"] in (0, None) for metric in payload["metrics"])
+    assert payload["subjects"] == []
+    assert payload["topics"] == []
+    assert payload["syllabus"] == []
+    assert payload["continue_learning"] is None
+    assert payload["daily_mission"] is None
+    assert payload["knowledge_map"] is None
+    assert payload["knowledge_map_available"] is False
+
+
+def test_dashboard_api_does_not_include_another_users_activity():
+    client = app_module.app.test_client()
+    register_demo_user(client, "dashboard-owner@example.com")
+
+    with app_module.app.app_context():
+        db.session.add(
+            User(
+                id="another-user",
+                email="another-dashboard-user@example.com",
+                name="Another Learner",
+                password_hash="not-used-in-test",
+            )
+        )
+        db.session.add(
+            Conversation(
+                user_id="another-user",
+                chat_id="private-chat",
+                message="Private question",
+                reply="Private answer",
+                intent="forces",
+                confidence=99.0,
+            )
+        )
+        db.session.commit()
+
+    payload = client.get("/api/dashboard").get_json()
+
+    assert payload["stats"]["questions_asked"] == 0
+    assert payload["recent_questions"] == []
+    assert payload["sessions"] == []
 
 
 def test_chat_rate_limit_is_enforced(monkeypatch):
