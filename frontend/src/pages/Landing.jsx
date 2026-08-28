@@ -9,19 +9,18 @@ import {
   FileText,
   ChevronDown,
   Cpu,
-  Sparkles,
   ShieldCheck,
   Play,
   Brain,
   Atom,
-  Calculator,
+  Zap,
   GraduationCap,
   Check,
   CircleDot,
 } from 'lucide-react';
 
 /* ─────────────────────────────────────────────────────────────
-   Ambient background
+  Ambient background
 ───────────────────────────────────────────────────────────── */
 
 const ScientificBackground = () => (
@@ -479,7 +478,7 @@ const Landing = ({ onNavigate }) => {
 
       {/* Navbar */}
       <header className="sticky top-0 z-50 px-4 pt-4">
-        <nav className="mx-auto flex max-w-6xl items-center justify-between rounded-2xl border border-white/[0.08] bg-[#070908]/80 px-4 py-2.5 shadow-2xl shadow-black/20 backdrop-blur-2xl">
+        <nav className="mx-auto flex max-w-6xl items-center justify-between rounded-2xl border border-white/[0.08] bg-[#070908]/10 px-4 py-2.5 shadow-2xl shadow-black/20 backdrop-blur-xl">
           <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="flex items-center gap-2.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-300/20 bg-emerald-400 text-zinc-950 shadow-[0_8px_25px_-10px_rgba(52,211,153,.8)]">
               <Zap className="h-4 w-4" strokeWidth={2.4} />
@@ -511,7 +510,7 @@ const Landing = ({ onNavigate }) => {
       {/* Hero */}
       <main className="relative z-10">
         {/* Full-bleed GridDistortion background for the hero */}
-        <div style={{ position: 'relative' }}>
+        <div className="relative -mt-[72px] pt-[72px]">
           <div
             style={{
               position: 'absolute',
@@ -521,10 +520,10 @@ const Landing = ({ onNavigate }) => {
             }}
           >
             <GridDistortion
-              imageSrc="https://images.unsplash.com/photo-1635070041078-e363dbe005cb?w=1920&q=80"
-              grid={12}
-              mouse={0.12}
-              strength={0.18}
+              imageSrc="/background.png"
+              grid={17}
+              mouse={0.52}
+              strength={0.19}
               relaxation={0.92}
             />
             {/* Dark overlay to keep text legible */}

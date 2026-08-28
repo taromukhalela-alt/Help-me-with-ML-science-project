@@ -17,10 +17,16 @@ const fragmentShader = `
 uniform sampler2D uDataTexture;
 uniform sampler2D uTexture;
 uniform vec4 resolution;
+uniform float imageAspect;
 varying vec2 vUv;
 
 void main() {
-  vec2 uv = vUv;
+  float containerAspect = resolution.x / resolution.y;
+  vec2 cover = vec2(
+    min(1.0, containerAspect / imageAspect),
+    min(1.0, imageAspect / containerAspect)
+  );
+  vec2 uv = (vUv - 0.5) * cover + 0.5;
   vec4 offset = texture2D(uDataTexture, vUv);
   gl_FragColor = texture2D(uTexture, uv - 0.02 * offset.rg);
 }`;
@@ -34,6 +40,7 @@ const GridDistortion = ({ grid = 15, mouse = 0.1, strength = 0.15, relaxation = 
   const imageAspectRef = useRef(1);
   const animationIdRef = useRef(null);
   const resizeObserverRef = useRef(null);
+  const visibilityObserverRef = useRef(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -48,7 +55,8 @@ const GridDistortion = ({ grid = 15, mouse = 0.1, strength = 0.15, relaxation = 
       alpha: true,
       powerPreference: 'high-performance'
     });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    const mobilePixelRatio = window.matchMedia('(max-width: 640px)').matches ? 1.25 : 1.75;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, mobilePixelRatio));
     renderer.setClearColor(0x000000, 0);
     rendererRef.current = renderer;
 
@@ -62,6 +70,7 @@ const GridDistortion = ({ grid = 15, mouse = 0.1, strength = 0.15, relaxation = 
     const uniforms = {
       time: { value: 0 },
       resolution: { value: new THREE.Vector4() },
+      imageAspect: { value: imageAspectRef.current },
       uTexture: { value: null },
       uDataTexture: { value: null }
     };
@@ -73,6 +82,7 @@ const GridDistortion = ({ grid = 15, mouse = 0.1, strength = 0.15, relaxation = 
       texture.wrapS = THREE.ClampToEdgeWrapping;
       texture.wrapT = THREE.ClampToEdgeWrapping;
       imageAspectRef.current = texture.image.width / texture.image.height;
+      uniforms.imageAspect.value = imageAspectRef.current;
       uniforms.uTexture.value = texture;
       handleResize();
     });
@@ -148,7 +158,7 @@ const GridDistortion = ({ grid = 15, mouse = 0.1, strength = 0.15, relaxation = 
       vY: 0
     };
 
-    const handleMouseMove = e => {
+    const handlePointerMove = e => {
       const rect = container.getBoundingClientRect();
       const x = (e.clientX - rect.left) / rect.width;
       const y = 1 - (e.clientY - rect.top) / rect.height;
@@ -157,10 +167,7 @@ const GridDistortion = ({ grid = 15, mouse = 0.1, strength = 0.15, relaxation = 
       Object.assign(mouseState, { x, y, prevX: x, prevY: y });
     };
 
-    const handleMouseLeave = () => {
-      if (dataTexture) {
-        dataTexture.needsUpdate = true;
-      }
+    const resetPointer = () => {
       Object.assign(mouseState, {
         x: 0,
         y: 0,
@@ -171,12 +178,21 @@ const GridDistortion = ({ grid = 15, mouse = 0.1, strength = 0.15, relaxation = 
       });
     };
 
-    container.addEventListener('mousemove', handleMouseMove);
-    container.addEventListener('mouseleave', handleMouseLeave);
+    container.addEventListener('pointerdown', handlePointerMove, { passive: true });
+    container.addEventListener('pointermove', handlePointerMove, { passive: true });
+    container.addEventListener('pointerleave', resetPointer, { passive: true });
+    container.addEventListener('pointerup', resetPointer, { passive: true });
+    container.addEventListener('pointercancel', resetPointer, { passive: true });
 
     handleResize();
 
+    let isVisible = true;
     const animate = () => {
+      if (!isVisible) {
+        animationIdRef.current = null;
+        return;
+      }
+
       animationIdRef.current = requestAnimationFrame(animate);
 
       if (!renderer || !scene || !camera) return;
@@ -209,6 +225,15 @@ const GridDistortion = ({ grid = 15, mouse = 0.1, strength = 0.15, relaxation = 
       renderer.render(scene, camera);
     };
 
+    if (window.IntersectionObserver) {
+      const visibilityObserver = new IntersectionObserver(([entry]) => {
+        isVisible = entry.isIntersecting;
+        if (isVisible && !animationIdRef.current) animate();
+      });
+      visibilityObserver.observe(container);
+      visibilityObserverRef.current = visibilityObserver;
+    }
+
     animate();
 
     return () => {
@@ -222,8 +247,15 @@ const GridDistortion = ({ grid = 15, mouse = 0.1, strength = 0.15, relaxation = 
         window.removeEventListener('resize', handleResize);
       }
 
-      container.removeEventListener('mousemove', handleMouseMove);
-      container.removeEventListener('mouseleave', handleMouseLeave);
+      if (visibilityObserverRef.current) {
+        visibilityObserverRef.current.disconnect();
+      }
+
+      container.removeEventListener('pointerdown', handlePointerMove);
+      container.removeEventListener('pointermove', handlePointerMove);
+      container.removeEventListener('pointerleave', resetPointer);
+      container.removeEventListener('pointerup', resetPointer);
+      container.removeEventListener('pointercancel', resetPointer);
 
       if (renderer) {
         renderer.dispose();

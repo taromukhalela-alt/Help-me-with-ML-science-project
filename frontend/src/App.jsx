@@ -43,7 +43,7 @@ function App() {
       <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-100">
         <div className="flex flex-col items-center gap-3">
           <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-          <span className="text-xs font-bold uppercase tracking-widest text-emerald-400">Loading STEM OS...</span>
+          <span className="text-xs font-bold uppercase tracking-widest text-emerald-400">Loading Vector AI...</span>
         </div>
       </div>
     );
@@ -86,7 +86,7 @@ function App() {
       {showOnboarding && <Onboarding onComplete={() => setShowOnboarding(false)} />}
       <Layout>
         <Routes>
-          <Route path="/" element={<Navigate to="/chat" replace />} />
+          <Route path="/" element={<Navigator to="/chat" />} />
           <Route
             path="/chat"
             element={(
