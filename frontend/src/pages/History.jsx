@@ -1,11 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { History as HistoryIcon, MessageSquare, Clock, ArrowRight, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import MarkdownRenderer from '../components/MarkdownRenderer';
 
 const History = ({ onResumeSession }) => {
+  const [searchParams] = useSearchParams();
+  const requestedSessionId = searchParams.get('session');
   const [sessions, setSessions] = useState([]);
   const [selectedSession, setSelectedSession] = useState(null);
   const [loadingHistory, setLoadingHistory] = useState(true);
+  const [historyError, setHistoryError] = useState('');
   const [isDesktop, setIsDesktop] = useState(() => (typeof window !== 'undefined' ? window.innerWidth >= 768 : true));
   const [sidebarPinned, setSidebarPinned] = useState(() => (
     typeof window !== 'undefined' ? localStorage.getItem('vector_history_sidebar_pinned') === 'true' : false
@@ -45,14 +49,19 @@ const History = ({ onResumeSession }) => {
   };
 
   const fetchSessions = async () => {
+    setLoadingHistory(true);
+    setHistoryError('');
     try {
       const res = await fetch('/api/history');
       const data = await res.json();
-      if (data.success && Array.isArray(data.sessions)) {
-        setSessions(data.sessions);
+      if (!res.ok || !data.success || !Array.isArray(data.sessions)) {
+        throw new Error(data.error || data.message || 'Unable to load session history');
       }
-    } catch (e) {
-      console.error(e);
+      setSessions(data.sessions);
+    } catch (error) {
+      if (error.name !== 'AbortError') {
+        setHistoryError(error.message || 'Unable to load session history');
+      }
     } finally {
       setLoadingHistory(false);
     }
@@ -63,7 +72,7 @@ const History = ({ onResumeSession }) => {
     fetchSessions();
   }, []);
 
-  const handleSelectSession = async (sess) => {
+  const handleSelectSession = useCallback(async (sess) => {
     try {
       const res = await fetch(`/api/session/${sess.chat_id}`);
       const data = await res.json();
@@ -79,7 +88,17 @@ const History = ({ onResumeSession }) => {
     } catch (e) {
       console.error(e);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!requestedSessionId || !sessions.length || selectedSession?.chat_id === requestedSessionId) return;
+    const requestedSession = sessions.find((sess) => sess.chat_id === requestedSessionId);
+    if (requestedSession) {
+      // Selecting a deep-linked session is a response to the loaded session list.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      handleSelectSession(requestedSession);
+    }
+  }, [handleSelectSession, requestedSessionId, selectedSession, sessions]);
 
   return (
     <div className="relative flex h-full min-h-0 overflow-hidden bg-zinc-50 dark:bg-zinc-950">
@@ -117,6 +136,17 @@ const History = ({ onResumeSession }) => {
               <div className="h-10 bg-zinc-200/50 dark:bg-zinc-800/50 rounded-lg animate-pulse" />
               <div className="h-10 bg-zinc-200/50 dark:bg-zinc-800/50 rounded-lg animate-pulse" />
               <div className="h-10 bg-zinc-200/50 dark:bg-zinc-800/50 rounded-lg animate-pulse" />
+            </div>
+          ) : historyError ? (
+            <div className="p-2 text-center" role="alert">
+              <p className="text-[10px] leading-relaxed text-red-400">{historyError}</p>
+              <button
+                type="button"
+                onClick={fetchSessions}
+                className="mt-3 text-[10px] font-bold uppercase tracking-wider text-emerald-500 underline"
+              >
+                Try again
+              </button>
             </div>
           ) : sessions.length === 0 ? (
             <p className="text-[10px] text-zinc-400 text-center py-8">No archived sessions</p>

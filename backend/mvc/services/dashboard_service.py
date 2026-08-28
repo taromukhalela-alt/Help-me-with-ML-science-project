@@ -1,11 +1,34 @@
-import logging
 from collections import Counter
 from datetime import datetime
 
+from backend.domain.caps_knowledge import PHYSICS_INTENTS
 from backend.mvc.repositories.dashboard_repository import DashboardRepository
 
 
-logger = logging.getLogger(__name__)
+CHEMISTRY_INTENTS = {
+    "gas_laws",
+    "reaction_rates",
+    "bonding",
+    "acid_base",
+    "electrochemistry",
+}
+
+
+def _topic_key(value):
+    return " ".join(str(value or "").strip().lower().replace("_", " ").split())
+
+
+def _topic_label(value):
+    label = " ".join(str(value or "").strip().replace("_", " ").split())
+    return label.title().replace("'S", "'s")
+
+
+def _subject_for_topic(topic):
+    if topic in PHYSICS_INTENTS:
+        return "Physics"
+    if topic in CHEMISTRY_INTENTS or topic == "chemistry":
+        return "Chemistry"
+    return "Other"
 
 
 class DashboardService:
@@ -15,32 +38,28 @@ class DashboardService:
         self,
         latency_reader,
         session_builder=lambda _history: [],
-        animation_intents=(),
-        model_accuracy_reader=lambda: None,
         repository=None,
     ):
         self._latency_reader = latency_reader
         self._session_builder = session_builder
-        self._animation_intents = set(animation_intents)
-        self._model_accuracy_reader = model_accuracy_reader
         self._repository = repository or DashboardRepository()
 
     def build(self, user_id):
         now = datetime.now()
         notes_count = self._repository.note_count(user_id)
-        conversations = self._repository.recent_conversations(user_id)
+        conversation_reader = getattr(self._repository, "all_conversations", None)
+        conversations = (
+            conversation_reader(user_id)
+            if conversation_reader
+            else self._repository.recent_conversations(user_id)
+        )
+        conversation_count_reader = getattr(self._repository, "conversation_count", None)
+        questions_count = conversation_count_reader(user_id) if conversation_count_reader else len(conversations)
         confidences = [item.confidence for item in conversations if item.confidence is not None]
-        base_accuracy = round(sum(confidences) / len(confidences), 1) if confidences else 95.0
-        accuracy = min(100.0, base_accuracy + min(2.0, notes_count * 0.1))
-        latency = self._latency_reader(user_id) or 14.5
+        average_confidence = round(sum(confidences) / len(confidences), 1) if confidences else None
+        latency = self._latency_reader(user_id) or None
         intent_counts = Counter(item.intent for item in conversations if item.intent)
 
-        raw_model_accuracy = self._model_accuracy_reader()
-        model_accuracy = 0.0 if raw_model_accuracy is None else float(raw_model_accuracy)
-        if model_accuracy <= 1:
-            model_accuracy *= 100
-        model_accuracy = round(model_accuracy, 1)
-        average_confidence = round(sum(confidences) / len(confidences), 1) if confidences else 0.0
         history = [item.to_dict() for item in conversations]
         sessions = self._session_builder(history)
         today = now.date().toordinal()
@@ -52,36 +71,95 @@ class DashboardService:
                 if item.confidence is not None and item.timestamp
                 and item.timestamp.date().toordinal() == day
             ]
-            daily_confidence.append(round((sum(values) / len(values)) / 100, 3) if values else 0.0)
+            daily_confidence.append(round((sum(values) / len(values)) / 100, 3) if values else None)
         top_intents = [count for _intent, count in intent_counts.most_common(8)]
-        top_intents.extend([0] * (8 - len(top_intents)))
+        note_topic_reader = getattr(self._repository, "note_topic_counts", None)
+        note_topics = (note_topic_reader(user_id) if note_topic_reader else None) or Counter()
 
-        def progress(intents, base_weight=15):
-            interactions = sum(intent_counts.get(intent, 0) for intent in intents)
-            return int(min(100, base_weight + interactions * 5 + notes_count * 2))
+        topics_by_key = {}
+
+        def add_topic(value, source, count):
+            key = _topic_key(value)
+            if not key or key == "unknown":
+                return
+            topic = topics_by_key.setdefault(
+                key,
+                {
+                    "title": _topic_label(value),
+                    "subject": _subject_for_topic(key),
+                    "category": _subject_for_topic(key),
+                    "conversation_count": 0,
+                    "note_count": 0,
+                    "activity_count": 0,
+                    "sources": set(),
+                },
+            )
+            topic[f"{source}_count"] += count
+            topic["activity_count"] += count
+            topic["sources"].add(source)
+
+        for intent, count in intent_counts.items():
+            add_topic(intent, "conversation", count)
+        for topic, count in note_topics.items():
+            add_topic(topic, "note", count)
+
+        topics = []
+        for topic in topics_by_key.values():
+            topic["sources"] = sorted(topic["sources"])
+            topics.append(topic)
+        topics.sort(key=lambda item: (-item["activity_count"], item["title"].lower()))
+
+        subjects_by_name = {}
+        for topic in topics:
+            subject = subjects_by_name.setdefault(
+                topic["subject"],
+                {"name": topic["subject"], "topic_count": 0, "activity_count": 0},
+            )
+            subject["topic_count"] += 1
+            subject["activity_count"] += topic["activity_count"]
+        subjects = sorted(
+            subjects_by_name.values(),
+            key=lambda item: (-item["activity_count"], item["name"]),
+        )
+
+        continue_learning = None
+        if conversations:
+            latest = conversations[0]
+            continue_learning = {
+                "topic": latest.intent,
+                "title": _topic_label(latest.intent) if latest.intent else "Your latest question",
+                "question": (latest.message or "")[:180],
+                "chat_id": latest.chat_id,
+            }
+
+        daily_mission_reader = getattr(self._repository, "daily_mission", None)
+        daily_mission = (
+            daily_mission_reader(user_id) if daily_mission_reader else None
+        ) or None
+
+        relationship_reader = getattr(self._repository, "knowledge_relationships", None)
+        relationships = relationship_reader(user_id) if relationship_reader else []
+        knowledge_map = relationships if relationships else None
 
         return {
             "success": True,
             "timestamp": now.isoformat(),
             "stats": {
-                "model_accuracy": model_accuracy,
-                "questions_asked": len(conversations),
+                "questions_asked": questions_count,
+                "notes_saved": notes_count,
                 "avg_confidence": average_confidence,
-                "active_simulations": sum(
-                    count for intent, count in intent_counts.items()
-                    if intent in self._animation_intents
-                ),
-                "inference_latency_ms": self._latency_reader(user_id),
+                "inference_latency_ms": latency,
+                "sessions_count": len(sessions),
             },
             "charts": {
                 "line": daily_confidence,
                 "bar": top_intents,
-                "gauge": round(average_confidence / 100, 2) if average_confidence else 0.0,
+                "gauge": round(average_confidence / 100, 2) if average_confidence is not None else None,
             },
             "recent_questions": [
                 {
                     "question": item.message[:48],
-                    "confidence": item.confidence or 0,
+                    "confidence": item.confidence if item.confidence is not None else None,
                     "time": item.timestamp.strftime("%b %d, %H:%M") if item.timestamp else "",
                 }
                 for item in conversations[:6]
@@ -90,17 +168,24 @@ class DashboardService:
                 {key: item[key] for key in ("chat_id", "title", "count", "last_time")}
                 for item in sessions[:6]
             ],
+            "continue_learning": continue_learning,
+            "daily_mission": daily_mission,
+            "subjects": subjects,
+            "topics": topics,
+            # Keep the old response key for clients that still consume it, but
+            # populate it only with records found for this learner.
+            "syllabus": topics,
+            "knowledge_map": knowledge_map,
+            "knowledge_map_available": knowledge_map is not None,
+            "knowledge_map_message": (
+                None
+                if knowledge_map is not None
+                else "A knowledge map is unavailable because no topic relationships are stored yet."
+            ),
             "metrics": [
-                {"label": "Model accuracy", "value": accuracy, "max": 100, "unit": "%", "desc": "Calculated from average semantic confidence levels"},
-                {"label": "Inference latency", "value": latency, "max": 50, "unit": "ms", "desc": "Real-time median response synthesis time"},
-                {"label": "CAPS alignment", "value": 100.0, "max": 100, "unit": "%", "desc": "Syllabus criteria compliance match"},
-            ],
-            "syllabus": [
-                {"title": "Newton's Laws & Forces", "progress": progress(["forces", "dynamics"]), "grade": "Gr 11/12", "category": "Physics"},
-                {"title": "Projectile Motion", "progress": progress(["projectile_motion", "kinematics"]), "grade": "Gr 12", "category": "Physics"},
-                {"title": "Reaction Rates & Energy", "progress": progress(["chemistry"]), "grade": "Gr 12", "category": "Chemistry"},
-                {"title": "Acids & Bases", "progress": progress(["unit_conversion"]), "grade": "Gr 11/12", "category": "Chemistry"},
-                {"title": "Electrochemistry", "progress": progress(["electricity", "electrostatics"]), "grade": "Gr 12", "category": "Chemistry"},
-                {"title": "Doppler Effect & Waves", "progress": progress(["waves"]), "grade": "Gr 11/12", "category": "Physics"},
+                {"key": "questions_asked", "label": "Questions asked", "value": questions_count, "unit": "", "desc": "Tutor questions saved to your account"},
+                {"key": "notes_saved", "label": "Notes saved", "value": notes_count, "unit": "", "desc": "Study notes saved to your account"},
+                {"key": "avg_confidence", "label": "Average confidence", "value": average_confidence, "unit": "%", "max": 100, "desc": "Average intent confidence from your tutor questions"},
+                {"key": "inference_latency_ms", "label": "Response latency", "value": latency, "unit": "ms", "max": 50, "desc": "Average response time recorded for your tutor sessions"},
             ],
         }
