@@ -219,16 +219,46 @@ const Dashboard = () => {
           </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             {[
-              { label: 'Explain', description: 'Break down a concept', icon: MessageSquare },
-              { label: 'Solve With Me', description: 'Work it out step by step', icon: Target },
-              { label: 'Quiz Me', description: 'Test your understanding', icon: CheckCircle2 },
-              { label: 'Give Me a Hint', description: 'Get unstuck without spoilers', icon: Sparkles },
-              { label: 'Summarize', description: 'Make revision notes', icon: FileText },
-            ].map(({ label, description, icon: Icon }) => (
+              {
+                label: 'Explain',
+                description: 'Break down a concept',
+                icon: MessageSquare,
+                prompt: 'Explain a key STEM concept clearly, with an intuitive example and a quick check for understanding.'
+              },
+              {
+                label: 'Solve With Me',
+                description: 'Work it out step by step',
+                icon: Target,
+                prompt: 'Solve a STEM problem with me step by step and explain each formula and decision along the way.'
+              },
+              {
+                label: 'Quiz Me',
+                description: 'Test your understanding',
+                icon: CheckCircle2,
+                prompt: 'Quiz me on a STEM topic one question at a time and give me feedback after each answer.'
+              },
+              {
+                label: 'Give Me a Hint',
+                description: 'Get unstuck without spoilers',
+                icon: Sparkles,
+                prompt: 'Give me a small hint for a difficult STEM question without solving it outright.'
+              },
+              {
+                label: 'Summarize',
+                description: 'Make revision notes',
+                icon: FileText,
+                prompt: 'Summarize the most important ideas from my recent topic into a concise revision checklist.'
+              },
+            ].map(({ label, description, icon: Icon, prompt }) => (
               <button
                 key={label}
                 type="button"
-                onClick={() => navigate('/chat')}
+                onClick={() => {
+                  if (typeof window !== 'undefined') {
+                    sessionStorage.setItem('vector_dashboard_prompt', prompt);
+                  }
+                  navigate('/chat');
+                }}
                 className="card-flat flex items-center gap-3 p-4 text-left transition hover:border-emerald-400/30 hover:bg-emerald-400/[0.04]"
               >
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-emerald-400/15 bg-emerald-400/10 text-emerald-300">
