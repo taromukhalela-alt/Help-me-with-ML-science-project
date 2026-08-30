@@ -1208,8 +1208,8 @@ def _groq_generate_with_timeout(prompt, api_key, timeout_seconds):
     def worker():
         try:
             # Use a cached client to avoid per-request construction latency
-            model = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
-            max_tokens = env_int("GROQ_MAX_TOKENS", 2048, min_value=64, max_value=8192)
+            model = os.getenv("qwen/qwen3.8-27b")
+            max_tokens = env_int(2048, min_value=64, max_value=2048)
 
             client = get_groq_client(api_key)
             if not client:
@@ -1225,6 +1225,8 @@ def _groq_generate_with_timeout(prompt, api_key, timeout_seconds):
                 temperature=0.3,
                 top_p=0.95,
                 max_tokens=max_tokens,
+                stream=True,
+                reasoning_effort="high"
             )
             req_end = time.monotonic()
             logger.info(
@@ -1368,6 +1370,12 @@ def generate_response(
     if system_prompt is None:
         system_prompt = PHYSICS_SYSTEM_PROMPT
 
+    if user_message:
+        cached = get_cached_reply(user_message)
+        if cached:
+            logger.info("Using cached response for repeated question")
+            return cached["reply"]
+
     # Inject follow-up question prompt every 3rd exchange to encourage active learning
     if len(history) > 0 and len(history) % 3 == 0:
         user_message += (
@@ -1382,7 +1390,7 @@ def generate_response(
     # Primary provider: Google AI Studio Gemini
     try:
         google_timeout = timeout_seconds or (
-            60.0 if provider in {"openrouter", "groq"} else 20.0
+            10.0 if provider in {"openrouter", "groq"} else 5.0
         )
         text = _google_generate_with_timeout(
             prompt=prompt,
@@ -1391,6 +1399,7 @@ def generate_response(
             model_name=os.getenv("GOOGLE_CHAT_MODEL", "gemini-3.5-flash"),
         )
         if text:
+            set_cached_reply(user_message, text, intent="chat", confidence=0.9)
             return text
     except TimeoutError:
         logger.warning("Gemini timeout, falling back")
@@ -1419,6 +1428,7 @@ def generate_response(
                 max_tokens=env_int("OPENROUTER_EXAM_MAX_TOKENS", 9000, min_value=500),
             )
             if text:
+                set_cached_reply(user_message, text, intent="openrouter", confidence=0.8)
                 return text
             fallback = get_local_science_response(user_message)
             return (
@@ -1446,11 +1456,13 @@ def generate_response(
             text = _groq_generate_with_timeout(prompt, api_key, groq_timeout)
             if text:
                 logger.info("Groq successfully generated exam response")
+                set_cached_reply(user_message, text, intent="groq", confidence=0.8)
                 return text
             logger.info("Groq returned empty for exam, retrying without history")
             simple_prompt = f"{system_prompt}\n\nUser: {user_message}\nAssistant:"
             text = _groq_generate_with_timeout(simple_prompt, api_key, groq_timeout)
             if text:
+                set_cached_reply(user_message, text, intent="groq", confidence=0.8)
                 return text
             fallback = get_local_science_response(user_message)
             return (
@@ -1470,6 +1482,7 @@ def generate_response(
             groq_timeout = timeout_seconds or (6.0 if local_hint else 10.0)
             text = _groq_generate_with_timeout(prompt, api_key, groq_timeout)
             if text:
+                set_cached_reply(user_message, text, intent="groq", confidence=0.8)
                 return text
             logger.info("Groq returned empty, retrying without history")
             simple_prompt = f"{system_prompt}\n\nUser: {user_message}\nAssistant:"
@@ -1477,6 +1490,7 @@ def generate_response(
                 simple_prompt, api_key, timeout_seconds or 10.0
             )
             if text:
+                set_cached_reply(user_message, text, intent="groq", confidence=0.8)
                 return text
             logger.info("Groq empty, falling back to OpenRouter")
         except TimeoutError:
@@ -1524,6 +1538,7 @@ def generate_response(
                 payload = response.json()
                 text = (payload["choices"][0]["message"].get("content") or "").strip()
                 if text:
+                    set_cached_reply(user_message, text, intent="openrouter", confidence=0.75)
                     return text
 
             fallback_model = os.getenv("OPENROUTER_CHAT_FALLBACK", "openrouter/free")
@@ -1933,7 +1948,11 @@ def ensure_chat_id():
 
 
 def get_cached_reply(message):
-    key = message.strip().lower()
+    if not message or not isinstance(message, str):
+        return None
+    key = re.sub(r"\s+", " ", normalize_text(message or "")).strip().lower()
+    if not key:
+        return None
     cached = response_cache.get(key)
     if not cached:
         return None
@@ -1943,12 +1962,16 @@ def get_cached_reply(message):
     return cached
 
 
-def set_cached_reply(message, reply, intent, confidence):
-    key = message.strip().lower()
+def set_cached_reply(message, reply, intent=None, confidence=None):
+    if not message or not isinstance(message, str):
+        return
+    key = re.sub(r"\s+", " ", normalize_text(message or "")).strip().lower()
+    if not key or not reply:
+        return
     response_cache[key] = {
         "reply": reply,
-        "intent": intent,
-        "confidence": confidence,
+        "intent": intent or "unknown",
+        "confidence": confidence or 0.0,
         "timestamp": time.time(),
     }
 
