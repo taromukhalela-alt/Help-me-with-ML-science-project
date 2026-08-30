@@ -8,6 +8,7 @@ from flask import (
     url_for,
     send_from_directory,
     Response,
+    stream_with_context,
 )
 from flask_cors import CORS
 from flask_caching import Cache
@@ -207,9 +208,23 @@ cache = Cache(app, config={"CACHE_TYPE": "SimpleCache"})
 GROQ_CLIENT = None
 
 
+def _stream_reply_chunks(reply_text, chunk_size=18):
+    """Yield response text in small chunks so the UI can stream each token."""
+    if not reply_text:
+        return
+    # Split on word boundaries where possible so the UI feels natural while
+    # still supporting incremental rendering in the browser.
+    parts = re.findall(r"\S+\s*|\s+", reply_text)
+    for part in parts:
+        if not part:
+            continue
+        yield part
+        time.sleep(0.02)
+
+
 def get_groq_client(api_key):
     """Return a cached Groq client, creating it if necessary.
-
+    
     This avoids repeated client construction which can add significant
     latency (TLS handshakes, setup) per request.
     """
@@ -2485,6 +2500,18 @@ def chat():
     save_user_data(
         user_message, intent, chat_id=chat_id, reply=reply, confidence=confidence
     )
+
+    should_stream = (
+        payload.get("stream") is True
+        or request.headers.get("X-Stream") == "1"
+        or "text/event-stream" in (request.headers.get("Accept") or "")
+    )
+    if should_stream:
+        return Response(
+            stream_with_context(_stream_reply_chunks(reply)),
+            mimetype="text/plain",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
     return jsonify(
         {

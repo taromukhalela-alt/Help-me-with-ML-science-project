@@ -182,6 +182,7 @@ const Chat = ({ onMatchAnimation, initialPrompt, resumeChatId }) => {
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [isThinking, setIsThinking] = useState(false);
 
   // Memory/RAG state
   const [memory, setMemory] = useState(null);
@@ -310,15 +311,15 @@ const Chat = ({ onMatchAnimation, initialPrompt, resumeChatId }) => {
     }
   };
 
-  const loadSessions = async () => {
+  const loadSessions = useCallback(async () => {
     try {
       const res = await fetch('/api/history');
       const data = await res.json();
       if (data.success && Array.isArray(data.sessions)) setSessions(data.sessions);
     } catch (e) { console.error('Failed to load history', e); }
-  };
+  }, []);
 
-  const updateBrowserVoices = () => {
+  const updateBrowserVoices = useCallback(() => {
     if ('speechSynthesis' in window) {
       const voices = window.speechSynthesis.getVoices();
       const englishVoices = voices
@@ -331,26 +332,41 @@ const Chat = ({ onMatchAnimation, initialPrompt, resumeChatId }) => {
       setBrowserVoices(englishVoices);
       if (englishVoices.length > 0 && !voiceId) setVoiceId(englishVoices[0].voiceURI);
     }
-  };
+  }, [voiceId]);
 
   useEffect(() => {
-    loadSessions();
-    loadMemory();
-    updateBrowserVoices();
+    const initializeChat = async () => {
+      await Promise.all([loadSessions(), loadMemory()]);
+      updateBrowserVoices();
+    };
+    initializeChat();
     if ('speechSynthesis' in window) window.speechSynthesis.onvoiceschanged = updateBrowserVoices;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    return () => {
+      if ('speechSynthesis' in window) window.speechSynthesis.onvoiceschanged = null;
+    };
+  }, [loadMemory, loadSessions, updateBrowserVoices]);
+
+  const syncVoiceSelection = useCallback(() => {
+    localStorage.setItem('preferred_tts_provider', ttsProvider);
+    if (ttsProvider === 'camb') {
+      const next = localStorage.getItem('preferred_camb_voice') || '147320';
+      setVoiceId(prev => (prev === next ? prev : next));
+      return;
+    }
+    if (ttsProvider === 'elevenlabs') {
+      const next = localStorage.getItem('preferred_elevenlabs_voice') || 'pNInz6obpgDQGcFmaJgB';
+      setVoiceId(prev => (prev === next ? prev : next));
+      return;
+    }
+    const saved = localStorage.getItem('preferred_browser_voice') || '';
+    const next = saved || browserVoices[0]?.voiceURI || '';
+    if (next) setVoiceId(prev => (prev === next ? prev : next));
+  }, [browserVoices, ttsProvider]);
 
   useEffect(() => {
-    localStorage.setItem('preferred_tts_provider', ttsProvider);
-    if (ttsProvider === 'camb') setVoiceId(localStorage.getItem('preferred_camb_voice') || '147320');
-    else if (ttsProvider === 'elevenlabs') setVoiceId(localStorage.getItem('preferred_elevenlabs_voice') || 'pNInz6obpgDQGcFmaJgB');
-    else {
-      const saved = localStorage.getItem('preferred_browser_voice') || '';
-      if (saved) setVoiceId(saved);
-      else if (browserVoices.length > 0) setVoiceId(browserVoices[0].voiceURI);
-    }
-  }, [ttsProvider, browserVoices]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    syncVoiceSelection();
+  }, [syncVoiceSelection]);
 
   useEffect(() => {
     if (voiceId) {
@@ -388,7 +404,7 @@ const Chat = ({ onMatchAnimation, initialPrompt, resumeChatId }) => {
     } catch (e) { console.error(e); }
   };
 
-  const handleResumeSession = async (chatId) => {
+  const handleResumeSession = useCallback(async (chatId) => {
     try {
       const res = await fetch(`/api/session/${chatId}`);
       const data = await res.json();
@@ -398,7 +414,7 @@ const Chat = ({ onMatchAnimation, initialPrompt, resumeChatId }) => {
         if (!isDesktop) setSidebarOpen(false);
       }
     } catch (e) { console.error(e); }
-  };
+  }, [isDesktop]);
 
   const stopDictation = () => {
     if (recognitionRef.current) { try { recognitionRef.current.stop(); } catch { /* noop */ } }
@@ -477,6 +493,7 @@ const Chat = ({ onMatchAnimation, initialPrompt, resumeChatId }) => {
     if (!question || isSending) return;
     setInputValue('');
     setIsSending(true);
+    setIsThinking(true);
     const updatedMessages = [...messages, { role: 'user', content: question }];
     setMessages(updatedMessages);
 
@@ -484,49 +501,100 @@ const Chat = ({ onMatchAnimation, initialPrompt, resumeChatId }) => {
       trackEvent('chat_message_sent', { route: '/chat', message_length: question.length });
       const response = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-        body: JSON.stringify({ 
-          message: question, 
-          history: messages
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken,
+          'Accept': 'text/event-stream',
+          'X-Stream': '1',
+        },
+        body: JSON.stringify({
+          message: question,
+          history: messages,
+          stream: true,
         }),
       });
-      const data = await response.json();
-      if (data.reply) {
-        trackEvent('chat_response_received', { route: '/chat' });
-        setMessages([...updatedMessages, { 
-          role: 'assistant', 
-          content: data.reply
-        }]);
 
-        // Refresh memory after every AI response (the backend auto-updates it)
-        loadMemory();
-
-        try {
-          const matchRes = await fetch('/match-animation', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-            body: JSON.stringify({ question }),
-          });
-          const matchData = await matchRes.json();
-          if (matchData?.animation_id && onMatchAnimation) {
-            onMatchAnimation(matchData.animation_id, matchData.animation_label);
-          }
-        } catch (matchError) { console.warn('Simulation match failed', matchError); }
-      } else {
-        setMessages([...updatedMessages, { role: 'assistant', content: "I'm having a bit of trouble responding right now. Please try again." }]);
+      if (response.headers.get('content-type')?.includes('application/json')) {
+        const data = await response.json();
+        if (data.reply) {
+          trackEvent('chat_response_received', { route: '/chat' });
+          setMessages([...updatedMessages, { role: 'assistant', content: data.reply }]);
+          loadMemory();
+          try {
+            const matchRes = await fetch('/match-animation', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+              body: JSON.stringify({ question }),
+            });
+            const matchData = await matchRes.json();
+            if (matchData?.animation_id && onMatchAnimation) {
+              onMatchAnimation(matchData.animation_id, matchData.animation_label);
+            }
+          } catch (matchError) { console.warn('Simulation match failed', matchError); }
+        } else {
+          setMessages([...updatedMessages, { role: 'assistant', content: "I'm having a bit of trouble responding right now. Please try again." }]);
+        }
+        loadSessions();
+        return;
       }
+
+      if (!response.body) {
+        throw new Error('No response stream available');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let streamedReply = '';
+      const assistantMessageIndex = updatedMessages.length;
+      setMessages([...updatedMessages, { role: 'assistant', content: '' }]);
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        streamedReply += chunk;
+        setMessages((prev) => {
+          const next = [...prev];
+          next[assistantMessageIndex] = { ...next[assistantMessageIndex], content: streamedReply };
+          return next;
+        });
+      }
+
+      trackEvent('chat_response_received', { route: '/chat' });
+      loadMemory();
+      try {
+        const matchRes = await fetch('/match-animation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({ question }),
+        });
+        const matchData = await matchRes.json();
+        if (matchData?.animation_id && onMatchAnimation) {
+          onMatchAnimation(matchData.animation_id, matchData.animation_label);
+        }
+      } catch (matchError) { console.warn('Simulation match failed', matchError); }
       loadSessions();
     } catch {
       setMessages([...updatedMessages, { role: 'assistant', content: 'Connection issue. Could not reach AI Tutor.' }]);
     } finally {
       setIsSending(false);
+      setIsThinking(false);
     }
   };
 
   useEffect(() => {
-    if (!initialPrompt || consumedPromptRef.current === initialPrompt) return;
-    consumedPromptRef.current = initialPrompt;
-    handleSendMessage(initialPrompt);
+    const scheduledPrompt = typeof window !== 'undefined'
+      ? window.sessionStorage.getItem('vector_dashboard_prompt')
+      : null;
+
+    const promptToSend = scheduledPrompt || initialPrompt;
+    if (!promptToSend || consumedPromptRef.current === promptToSend) return;
+
+    consumedPromptRef.current = promptToSend;
+    if (scheduledPrompt && typeof window !== 'undefined') {
+      window.sessionStorage.removeItem('vector_dashboard_prompt');
+    }
+    handleSendMessage(promptToSend);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialPrompt]);
 
@@ -534,7 +602,7 @@ const Chat = ({ onMatchAnimation, initialPrompt, resumeChatId }) => {
     if (!resumeChatId || consumedResumeRef.current === resumeChatId) return;
     consumedResumeRef.current = resumeChatId;
     handleResumeSession(resumeChatId);
-  }, [resumeChatId]);
+  }, [handleResumeSession, resumeChatId]);
 
   const handleSaveAsNote = async (text) => {
     const topic = text.split(' ').slice(0, 3).join(' ') || 'General';
@@ -572,7 +640,14 @@ const Chat = ({ onMatchAnimation, initialPrompt, resumeChatId }) => {
   };
 
   return (
-    <div className="relative flex h-full min-h-0 overflow-hidden bg-zinc-950 text-zinc-100">
+    <>
+      <style>{`
+        @keyframes shimmer {
+          0% { transform: translateX(-120%); }
+          100% { transform: translateX(120%); }
+        }
+      `}</style>
+      <div className="relative flex h-full min-h-0 overflow-hidden bg-zinc-950 text-zinc-100">
       {/* Mobile overlay */}
       {sidebarVisible && !isDesktop && (
         <div
@@ -778,15 +853,33 @@ const Chat = ({ onMatchAnimation, initialPrompt, resumeChatId }) => {
                 );
               })}
 
-              {isSending && (
+              {(isSending || isThinking) && (
                 <div className="flex justify-start">
                   <div className="flex flex-col items-start">
                     <div className="text-[10.5px] font-medium uppercase tracking-wider text-zinc-500 mb-1.5 px-1">Vector AI</div>
-                    <div className="rounded-2xl rounded-tl-sm px-4 py-3 bg-zinc-900/50 border border-white/[0.06]">
-                      <div className="flex gap-1 items-center">
-                        {[0, 1, 2].map(i => (
-                          <span key={i} className="typing-dot w-1.5 h-1.5 rounded-full bg-emerald-400/80" style={{ animationDelay: `${i * 0.15}s` }} />
-                        ))}
+                    <div className="relative overflow-hidden rounded-2xl rounded-tl-sm border border-emerald-500/20 bg-gradient-to-r from-emerald-500/10 via-zinc-900/80 to-zinc-900/80 px-4 py-3 shadow-[0_0_24px_rgba(16,185,129,0.12)]">
+                      <div className="absolute inset-0 bg-[linear-gradient(120deg,transparent_0%,rgba(52,211,153,0.14)_45%,transparent_75%)] animate-[shimmer_1.8s_linear_infinite]" />
+                      <div className="relative flex items-center gap-3">
+                        <div className="relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-emerald-400/30 bg-emerald-500/10">
+                          <span className="absolute inset-1 rounded-full bg-[radial-gradient(circle,_rgba(52,211,153,0.45),_transparent_68%)] animate-pulse" />
+                          <span className="relative h-2.5 w-2.5 rounded-full bg-emerald-300 shadow-[0_0_18px_rgba(52,211,153,0.9)] animate-[pulse_1.4s_ease-in-out_infinite]" />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[13px] font-medium text-emerald-100">Vector is thinking</span>
+                          <div className="flex items-end gap-1">
+                            {[0, 1, 2].map((dot) => (
+                              <span
+                                key={dot}
+                                className="block h-1.5 w-1.5 rounded-full bg-emerald-400/90"
+                                style={{
+                                  animation: 'pulse 1.2s ease-in-out infinite',
+                                  animationDelay: `${dot * 0.18}s`,
+                                  transform: 'translateY(0)',
+                                }}
+                              />
+                            ))}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -855,7 +948,8 @@ const Chat = ({ onMatchAnimation, initialPrompt, resumeChatId }) => {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 };
 
