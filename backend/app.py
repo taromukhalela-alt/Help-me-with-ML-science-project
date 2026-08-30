@@ -1387,7 +1387,30 @@ def generate_response(
 
     prompt = build_prompt(history, user_message, system_prompt, user_key=user_key)
 
-    # Primary provider: Google AI Studio Gemini
+    # First-choice provider for chat: Groq (fast, cheap, low latency)
+    api_key = os.getenv("GROQ_API_KEY") or os.getenv("GROQ_KEY")
+    if api_key and Groq and provider != "google":
+        try:
+            groq_timeout = timeout_seconds or (5.0 if local_hint else 8.0)
+            text = _groq_generate_with_timeout(prompt, api_key, groq_timeout)
+            if text:
+                set_cached_reply(user_message, text, intent="groq", confidence=0.8)
+                return text
+            logger.info("Groq returned empty, retrying without history")
+            simple_prompt = f"{system_prompt}\n\nUser: {user_message}\nAssistant:"
+            text = _groq_generate_with_timeout(
+                simple_prompt, api_key, timeout_seconds or 8.0
+            )
+            if text:
+                set_cached_reply(user_message, text, intent="groq", confidence=0.8)
+                return text
+            logger.info("Groq empty, falling back to Gemini")
+        except TimeoutError:
+            logger.warning("Groq timeout, falling back to Gemini")
+        except Exception as e:
+            logger.warning("Groq error: %s", e)
+
+    # Secondary provider: Google AI Studio Gemini
     try:
         google_timeout = timeout_seconds or (
             10.0 if provider in {"openrouter", "groq"} else 5.0
@@ -1474,29 +1497,6 @@ def generate_response(
         except Exception as e:
             logger.error("Groq generation error for exam: %s", e)
             return "I hit a temporary issue while generating the exam paper. Please try again."
-
-    # Fallback to Groq for chat
-    api_key = os.getenv("GROQ_API_KEY") or os.getenv("GROQ_KEY")
-    if api_key and Groq:
-        try:
-            groq_timeout = timeout_seconds or (6.0 if local_hint else 10.0)
-            text = _groq_generate_with_timeout(prompt, api_key, groq_timeout)
-            if text:
-                set_cached_reply(user_message, text, intent="groq", confidence=0.8)
-                return text
-            logger.info("Groq returned empty, retrying without history")
-            simple_prompt = f"{system_prompt}\n\nUser: {user_message}\nAssistant:"
-            text = _groq_generate_with_timeout(
-                simple_prompt, api_key, timeout_seconds or 10.0
-            )
-            if text:
-                set_cached_reply(user_message, text, intent="groq", confidence=0.8)
-                return text
-            logger.info("Groq empty, falling back to OpenRouter")
-        except TimeoutError:
-            logger.error("Groq timeout, falling back to OpenRouter")
-        except Exception as e:
-            logger.warning("Groq error: %s", e)
 
     # Fallback to OpenRouter
     api_key = os.getenv("OPENROUTER_API_KEY")
