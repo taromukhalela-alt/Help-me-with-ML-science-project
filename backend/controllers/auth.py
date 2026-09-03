@@ -36,7 +36,12 @@ def load_user(user_id):
 
 @login_manager.unauthorized_handler
 def unauthorized():
-    if request.is_json or request.method != "GET" or request.path.startswith("/api/"):
+    if (
+        request.is_json
+        or request.method != "GET"
+        or request.path.startswith("/api/")
+        or request.path.startswith("/documents")
+    ):
         return jsonify({"success": False, "message": "Authentication required"}), 401
     return redirect(url_for("auth.login"))
 

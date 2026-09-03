@@ -17,6 +17,7 @@ replace.py
 replace_rgb.py 
 revert_colors.py
 instance/vector_ai.db
+backend/instance/documents/
 .agents/
 .kilo/
 stress_test_premium.jsx

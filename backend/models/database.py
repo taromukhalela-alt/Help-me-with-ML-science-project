@@ -24,6 +24,7 @@ class User(db.Model, UserMixin):
     # Relationships
     notes = db.relationship('Note', backref='user', lazy=True, cascade="all, delete-orphan")
     conversations = db.relationship('Conversation', backref='user', lazy=True, cascade="all, delete-orphan")
+    documents = db.relationship('Document', backref='user', lazy=True, cascade="all, delete-orphan")
 
     def to_dict(self):
         return {
@@ -83,4 +84,35 @@ class Conversation(db.Model):
             "confidence": self.confidence,
             "time": self.timestamp.isoformat(),
             "chat_id": self.chat_id
+        }
+
+
+class Document(db.Model):
+    __tablename__ = "documents"
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "content_hash", name="uq_document_user_content_hash"),
+    )
+
+    id = db.Column(db.String(50), primary_key=True)
+    user_id = db.Column(db.String(50), db.ForeignKey("users.id"), nullable=False, index=True)
+    title = db.Column(db.String(200), nullable=False)
+    # Retained for retry/recovery of queued jobs; never included in API payloads.
+    content = db.Column(db.Text)
+    content_hash = db.Column(db.String(64), nullable=False, index=True)
+    theme = db.Column(db.String(50), nullable=False, default="default")
+    status = db.Column(db.String(20), nullable=False, default="queued", index=True)
+    storage_path = db.Column(db.Text)
+    error = db.Column(db.Text)
+    metadata_json = db.Column(db.JSON, default=dict)
+    created_at = db.Column(db.DateTime, default=utc_now)
+    updated_at = db.Column(db.DateTime, default=utc_now, onupdate=utc_now)
+
+    def to_dict(self):
+        return {
+            "id": self.id, "title": self.title, "theme": self.theme,
+            "status": self.status, "error": self.error,
+            "content_hash": self.content_hash,
+            "metadata": self.metadata_json or {},
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
