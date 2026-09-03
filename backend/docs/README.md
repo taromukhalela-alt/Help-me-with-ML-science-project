@@ -187,6 +187,22 @@ Vector-AI/
 - **Auth**: Flask-Login, Werkzeug password hashing, CSRF tokens
 - **Storage**: SQLite via SQLAlchemy
 
+## PDF documents
+
+Authenticated clients can generate a document asynchronously:
+
+- `POST /documents` with `{ "title": "...", "content": "...", "theme": "default" }`
+- `GET /documents/<id>` for document metadata and job state
+- `GET /documents/<id>/status` for a small status response
+- `GET /documents/<id>/download` after the job completes
+- `DELETE /documents/<id>` to remove the record and generated file
+
+The pipeline converts markdown-like content to a document IR, recognizes
+headings, fenced code, equations, Mermaid/image diagram blocks, and validates
+PDF bytes before atomically storing them. The built-in renderer uses only the
+standard library; an optional ReportLab renderer can be selected by callers.
+Duplicate requests for the same user/content/theme are deduplicated by SHA-256.
+
 ## Security Notes
 
 - Mutating routes require CSRF tokens.

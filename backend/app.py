@@ -7,6 +7,7 @@ from flask import (
     redirect,
     url_for,
     send_from_directory,
+    send_file,
     Response,
     stream_with_context,
 )
@@ -14,6 +15,7 @@ from flask_cors import CORS
 from flask_caching import Cache
 from flask_login import login_required, current_user, logout_user
 import json
+import io
 from datetime import datetime
 import urllib.request
 import queue
@@ -27,6 +29,7 @@ import logging
 import time
 import requests
 import secrets
+from sqlalchemy.exc import IntegrityError
 from collections import Counter, defaultdict, deque
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
@@ -168,7 +171,7 @@ if cors_origins:
     CORS(app, origins=cors_origins, supports_credentials=False)
 
 # Initialize Database
-from backend.models.database import db, User, Note, Conversation, utc_now
+from backend.models.database import db, User, Note, Conversation, Document, utc_now
 
 app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv(
     "DATABASE_URL", f"sqlite:///{os.path.join(BACKEND_ROOT, 'instance', 'vector_ai.db')}"
@@ -3363,17 +3366,134 @@ def get_profile():
         }
     )
 
+
+# PDF document generation -------------------------------------------------
+from backend.documents.schemas import DocumentCreate, ValidationError
+from backend.documents.service import DocumentService
+from backend.documents.storage import FileStorage
+
+DOCUMENT_STORAGE = FileStorage(
+    os.getenv("DOCUMENT_STORAGE_PATH", os.path.join(BACKEND_ROOT, "instance", "documents"))
+)
+document_service = DocumentService(app, DOCUMENT_STORAGE, db=db, model=Document)
+document_service.resume_pending()
+
+
+def _document_payload(record):
+    payload = record.to_dict()
+    payload["status_url"] = url_for("document_status", document_id=record.id)
+    payload["download_url"] = url_for("document_download", document_id=record.id)
+    return payload
+
+
+@app.route("/documents", methods=["POST"])
+@app.route("/api/documents", methods=["POST"])
+@login_required
+def create_document():
+    data = request.get_json(silent=True) or {}
+    try:
+        schema = DocumentCreate(**data)
+        title, content, theme = schema.title.strip(), schema.content, schema.theme.strip()
+    except (ValidationError, TypeError, ValueError, AttributeError) as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
+    if not title or not content.strip():
+        return jsonify({"success": False, "error": "title and content are required"}), 400
+    if theme not in {"default", "academic", "dark"}:
+        return jsonify({"success": False, "error": "Unknown theme"}), 400
+    digest = document_service.content_hash(title, content, theme)
+    existing = Document.query.filter_by(
+        user_id=current_user.id, content_hash=digest
+    ).filter(Document.status.in_(["queued", "processing", "completed"])).first()
+    if existing:
+        payload = _document_payload(existing)
+        return jsonify({"success": True, "document": payload, "id": existing.id,
+                        "status": existing.status, "deduplicated": True}), 200
+    record = Document(
+        id="doc_" + secrets.token_urlsafe(16), user_id=current_user.id,
+        title=title, content=content, content_hash=digest, theme=theme,
+        metadata_json=schema.metadata
+    )
+    db.session.add(record)
+    try:
+        db.session.commit()
+    except IntegrityError:
+        # A concurrent request may have won the unique user/hash race.
+        db.session.rollback()
+        existing = Document.query.filter_by(
+            user_id=current_user.id, content_hash=digest
+        ).first()
+        if existing:
+            payload = _document_payload(existing)
+            return jsonify({"success": True, "document": payload, "id": existing.id,
+                            "status": existing.status, "deduplicated": True}), 200
+        raise
+    document_service.enqueue(record, title, content, theme, schema.metadata)
+    payload = _document_payload(record)
+    return jsonify({"success": True, "document": payload, "id": record.id,
+                    "status": record.status}), 202
+
+
+@app.route("/documents/<document_id>", methods=["GET"])
+@app.route("/api/documents/<document_id>", methods=["GET"])
+@login_required
+def get_document(document_id):
+    record = Document.query.filter_by(id=document_id, user_id=current_user.id).first_or_404()
+    return jsonify({"success": True, "document": _document_payload(record)})
+
+
+@app.route("/documents/<document_id>/status", methods=["GET"])
+@app.route("/api/documents/<document_id>/status", methods=["GET"])
+@login_required
+def document_status(document_id):
+    record = Document.query.filter_by(id=document_id, user_id=current_user.id).first_or_404()
+    return jsonify({"success": True, "id": record.id, "status": record.status, "error": record.error})
+
+
+@app.route("/documents/<document_id>/download", methods=["GET"])
+@app.route("/api/documents/<document_id>/download", methods=["GET"])
+@login_required
+def document_download(document_id):
+    record = Document.query.filter_by(id=document_id, user_id=current_user.id).first_or_404()
+    if record.status != "completed" or not record.storage_path:
+        return jsonify({"success": False, "error": "Document is not ready"}), 409
+    try:
+        data = DOCUMENT_STORAGE.open(record.storage_path)
+    except (OSError, ValueError):
+        return jsonify({"success": False, "error": "Document file unavailable"}), 404
+    safe_name = re.sub(r"[^A-Za-z0-9._ -]", "_", record.title).strip()[:120] or "document"
+    return send_file(io.BytesIO(data), mimetype="application/pdf",
+                     as_attachment=True, download_name=safe_name + ".pdf")
+
+
+@app.route("/documents/<document_id>", methods=["DELETE"])
+@app.route("/api/documents/<document_id>", methods=["DELETE"])
+@login_required
+def delete_document(document_id):
+    record = Document.query.filter_by(id=document_id, user_id=current_user.id).first_or_404()
+    if record.storage_path:
+        try:
+            DOCUMENT_STORAGE.delete(record.storage_path)
+        except ValueError:
+            # A malformed legacy path must not prevent deleting its DB row.
+            app.logger.warning("Ignoring invalid document storage path for %s", record.id)
+    db.session.delete(record)
+    db.session.commit()
+    return jsonify({"success": True})
+
 @app.errorhandler(403)
 def handle_403(error):
-    if request.path.startswith('/api') or request.is_json:
+    if request.path.startswith(('/api', '/documents')) or request.is_json:
         return jsonify({
             "success": False,
             "error": "Unauthorized"
-        }), 
+        }), 403
+    return render_template(
+        "index.html", user=current_user if current_user.is_authenticated else None
+    ), 403
 
 @app.errorhandler(404)
 def handle_404(error):
-    if request.path.startswith("/api") or request.is_json:
+    if request.path.startswith(("/api", "/documents")) or request.is_json:
         return jsonify({"success": False, "error": "Not found"}), 404
     return (
         render_template(

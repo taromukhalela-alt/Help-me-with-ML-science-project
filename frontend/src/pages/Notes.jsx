@@ -20,191 +20,6 @@ import {
   Clock,
   AlignLeft,
 } from 'lucide-react';
-import katex from 'katex';
-import 'katex/dist/katex.min.css';
-import html2canvas from 'html2canvas';
-import html2pdf from 'html2pdf.js';
-import { pdf } from '@react-pdf/renderer';
-import NotesPdfDocument from '../components/NotesPdfDocument';
-
-// ─── Math pre-processing pipeline (for PDF export) ────────────────────────────
-const preprocessContent = (content) => {
-  const mathMap = {};
-  const codeStore = [];
-  let idx = 0;
-
-  let md = String(content || '').replace(
-    /(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`)/g,
-    (m) => {
-      const id = `__CODE_${codeStore.length}__`;
-      codeStore.push(m);
-      return id;
-    },
-  );
-
-  const tok = (latex, display) => {
-    const key = `@@MATH_${idx++}@@`;
-    mathMap[key] = { latex, display };
-    return key;
-  };
-
-  md = md
-    .replace(/\\\[([\s\S]*?)\\\]/g, (_, m) => tok(m, true))
-    .replace(/(?<!\\)\$\$([\s\S]*?)(?<!\\)\$\$/g, (_, m) => tok(m, true))
-    .replace(/\\\(([\s\S]*?)\\\)/g, (_, m) => tok(m, false))
-    .replace(/(?<!\\)\$([^\n$]+?)(?<!\\)\$/g, (_, m) => tok(m, false));
-
-  md = md.replace(/__CODE_(\d+)__/g, (_, i) => codeStore[+i]);
-
-  return { processed: md, mathMap };
-};
-
-const UNSUPPORTED_COLOR_FUNCTION_RE = /\b(?:oklch|lch|lab|color)\(/i;
-
-const fallbackCssValue = (propName, displayMode) => {
-  const prop = String(propName || '').toLowerCase();
-  if (prop === 'color' || prop.endsWith('color') || prop === 'fill' || prop === 'stroke') return '#1e293b';
-  if (prop.startsWith('background')) return displayMode ? '#f7fef9' : 'transparent';
-  if (prop.includes('shadow')) return 'none';
-  return '';
-};
-
-const sanitizeCssValue = (propName, value, displayMode) => {
-  if (!value) return value;
-  return UNSUPPORTED_COLOR_FUNCTION_RE.test(value) ? fallbackCssValue(propName, displayMode) : value;
-};
-
-const snapshotInlineStyles = (root, displayMode) => {
-  if (!root || typeof window === 'undefined') return;
-  const applySafeStyles = (el) => {
-    if (!(el instanceof Element)) return;
-    try {
-      el.style.setProperty('color', '#1e293b');
-      el.style.setProperty('background-color', 'transparent');
-      el.style.setProperty('border-color', '#94a3b8');
-      el.style.setProperty('text-shadow', 'none');
-      el.style.setProperty('box-shadow', 'none');
-    } catch { }
-    Array.from(el.children).forEach((child) => applySafeStyles(child));
-  };
-  applySafeStyles(root);
-};
-
-const renderMathToPng = async (latex, displayMode) => {
-  if (typeof document === 'undefined') return null;
-
-  const backgroundColor = displayMode ? '#f7fef9' : '#ffffff';
-  const foregroundColor = '#1e293b';
-
-  const wrap = document.createElement('div');
-  wrap.setAttribute('data-math-isolated', 'true');
-
-  Object.assign(wrap.style, {
-    position: 'absolute',
-    top: '0px',
-    left: '0px',
-    display: 'inline-block',
-    backgroundColor,
-    color: foregroundColor,
-    padding: displayMode ? '12px 20px' : '3px 6px',
-    fontSize: '16px',
-    lineHeight: '1.4',
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-    zIndex: '-9999',
-    opacity: '0',
-    pointerEvents: 'none',
-    margin: '0',
-    border: 'none',
-    boxSizing: 'border-box',
-  });
-
-  const container = document.createElement('div');
-  container.style.color = foregroundColor;
-  container.style.backgroundColor = 'transparent';
-  wrap.appendChild(container);
-
-  document.body.appendChild(wrap);
-
-  try {
-    // Render KaTeX natively
-    katex.render(String(latex || '').trim(), container, {
-      displayMode,
-      throwOnError: false,
-      strict: false,
-      output: 'html',
-      trust: false,
-    });
-
-    // Wait for fonts to be ready
-    if (document.fonts?.ready) await document.fonts.ready;
-    await new Promise((r) => setTimeout(r, 150));
-
-    const canvas = await html2canvas(wrap, {
-      scale: 3,
-      backgroundColor,
-      useCORS: true,
-      logging: false,
-      allowTaint: false,
-      removeContainer: true,
-      foreignObjectRendering: false,
-      // CRITICAL: This tells html2canvas to ignore all stylesheets EXCEPT KaTeX.
-      // This prevents it from crashing on Tailwind's oklch() colors.
-      ignoreElements: (element) => {
-        if (element.tagName === 'LINK' && element.rel === 'stylesheet') {
-          return !element.href || !element.href.includes('katex');
-        }
-        if (element.tagName === 'STYLE') {
-          return !element.textContent || !element.textContent.includes('.katex');
-        }
-        return false;
-      },
-      onclone: (clonedDoc) => {
-        // Ensure the cloned wrap is visible for the screenshot
-        const clonedWrap = clonedDoc.querySelector('[data-math-isolated="true"]');
-        if (clonedWrap) {
-          clonedDoc.body.style.backgroundColor = 'transparent';
-          clonedDoc.body.style.margin = '0';
-          clonedWrap.style.opacity = '1';
-          clonedWrap.style.left = '0px';
-          clonedWrap.style.top = '0px';
-        }
-      },
-    });
-
-    return {
-      dataUrl: canvas.toDataURL('image/png'),
-      width: canvas.width / 3,
-      height: canvas.height / 3
-    };
-  } catch (err) {
-    console.error('[Vector AI] Math render failed for:', latex, err);
-    return null;
-  } finally {
-    if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
-  }
-};
-
-const prerenderMathImages = async (mathMap) => {
-  if (typeof document === 'undefined') return {};
-  const images = {};
-  const entries = Object.entries(mathMap);
-  if (!entries.length) return images;
-
-  if (document.fonts?.ready) await document.fonts.ready;
-  const katexFamilies = ['KaTeX_Main', 'KaTeX_Math', 'KaTeX_AMS', 'KaTeX_Size1', 'KaTeX_Size2', 'KaTeX_Size3', 'KaTeX_Size4'];
-  if (document.fonts?.load) {
-    await Promise.allSettled(
-      katexFamilies.flatMap((f) => ['12px', '16px', '24px'].map((s) => document.fonts.load(`${s} ${f}`))),
-    );
-  }
-  await new Promise((r) => setTimeout(r, 200));
-
-  for (const [key, { latex, display }] of entries) {
-    const result = await renderMathToPng(latex, display);
-    images[key] = result ? { ...result, display, latex } : { display, latex };
-  }
-  return images;
-};
 
 // ─── Helper: format relative date ─────────────────────────────────────────────
 const formatRelativeDate = (dateStr) => {
@@ -436,102 +251,43 @@ const Notes = () => {
 
   const handleSearchSubmit = (e) => { e.preventDefault(); fetchNotes(searchQuery); };
 
-  // ─── PDF Export (fixed for @react-pdf/renderer v4) ────────────────────────
+  // Generate PDFs through the authenticated backend pipeline.
   const handleDownloadPDF = useCallback(async () => {
     if (!selectedNote) return;
     setIsExporting(true);
-
-    const safeFilename = (selectedNote.title || 'study_note')
-      .replace(/[^a-zA-Z0-9_\- ]/g, '')
-      .trim()
-      .replace(/\s+/g, '_') || 'study_note';
-
     try {
-      const { processed: tokenizedContent, mathMap } = preprocessContent(selectedNote.content || '');
-      const mathImages = await prerenderMathImages(mathMap);
-
-      // v4 API: pdf(element) returns instance with .toBlob()
-      const instance = pdf(
-        <NotesPdfDocument
-          note={{ ...selectedNote, content: tokenizedContent }}
-          mathImages={mathImages}
-        />
-      );
-
-      const blob = await instance.toBlob();
-
-      const url = URL.createObjectURL(blob);
+      const response = await fetch('/api/documents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({ title: selectedNote.title || 'Study Note', content: selectedNote.content || '', theme: 'default' }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'PDF generation failed');
+      let status = payload.status;
+      while (status !== 'completed') {
+        if (status === 'failed') throw new Error(payload.error || 'PDF generation failed');
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        const poll = await fetch(`/api/documents/${encodeURIComponent(payload.id)}/status`);
+        const data = await poll.json();
+        if (!poll.ok) throw new Error(data.error || 'Unable to check PDF status');
+        status = data.status;
+      }
+      const download = await fetch(`/api/documents/${encodeURIComponent(payload.id)}/download`);
+      if (!download.ok) throw new Error('Generated PDF is unavailable');
+      const url = URL.createObjectURL(await download.blob());
       const link = document.createElement('a');
       link.href = url;
-      link.download = `${safeFilename}.pdf`;
-      document.body.appendChild(link);
+      link.download = `${(selectedNote.title || 'study_note').replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`;
       link.click();
-      document.body.removeChild(link);
-      setTimeout(() => URL.revokeObjectURL(url), 1500);
-
+      URL.revokeObjectURL(url);
       showStatus('PDF exported successfully ✓');
-      trackEvent('pdf_exported', { route: '/notes', note_title: selectedNote.title, topic: selectedNote.topic || 'General' });
+      trackEvent('pdf_exported', { route: '/notes', note_title: selectedNote.title });
     } catch (error) {
-      console.warn('React-PDF export failed, attempting fallback to html2pdf:', error);
-      try {
-        const element = document.getElementById('print-note-root');
-        if (!element) throw new Error('Rendered notes content not found.');
-
-        // Build premium styled container for the PDF
-        const printContainer = document.createElement('div');
-        printContainer.className = 'markdown-body prose max-w-none';
-        Object.assign(printContainer.style, {
-          padding: '24px',
-          backgroundColor: '#ffffff',
-          color: '#09090b',
-          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-        });
-
-        // Header info
-        const headerEl = document.createElement('div');
-        Object.assign(headerEl.style, {
-          borderBottom: '2px solid #10b981',
-          paddingBottom: '12px',
-          marginBottom: '20px',
-        });
-        headerEl.innerHTML = `
-          <h1 style="margin: 0 0 4px 0; font-size: 22px; font-weight: bold; color: #0f172a;">${selectedNote.title || 'Study Note'}</h1>
-          <div style="font-size: 11px; color: #64748b; font-weight: 500;">
-            Vector AI &bull; ${selectedNote.topic || 'General'} &bull; ${new Date().toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' })}
-          </div>
-        `;
-        printContainer.appendChild(headerEl);
-
-        // Copy content
-        const bodyContent = document.createElement('div');
-        bodyContent.appendChild(element.cloneNode(true));
-        printContainer.appendChild(bodyContent);
-
-        // Remove dark mode classes/styles if any
-        printContainer.querySelectorAll('*').forEach(el => {
-          el.classList.remove('prose-invert', 'dark:prose-invert', 'text-zinc-200', 'dark:text-zinc-200', 'bg-zinc-950', 'dark:bg-zinc-950');
-          if (el.tagName === 'A') el.style.color = '#047857';
-        });
-
-        const opt = {
-          margin: [15, 15, 15, 15],
-          filename: `${safeFilename}.pdf`,
-          image: { type: 'jpeg', quality: 0.98 },
-          html2canvas: { scale: 2, useCORS: true, letterRendering: true },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-        };
-
-        await html2pdf().set(opt).from(printContainer).save();
-        showStatus('PDF exported successfully (fallback) ✓');
-        trackEvent('pdf_exported_fallback', { route: '/notes', note_title: selectedNote.title, topic: selectedNote.topic || 'General' });
-      } catch (fallbackError) {
-        console.error('Fallback PDF export failed:', fallbackError);
-        showStatus(`PDF export failed: ${fallbackError?.message || 'Unknown error'}`, 'error');
-      }
+      showStatus(`PDF export failed: ${error.message}`, 'error');
     } finally {
       setIsExporting(false);
     }
-  }, [selectedNote, showToast]);
+  }, [selectedNote, csrfToken]);
 
   // ─── Keyboard shortcut: Ctrl+S to save ────────────────────────────────────
   useEffect(() => {
